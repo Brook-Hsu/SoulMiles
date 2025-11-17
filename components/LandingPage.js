@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import SoulIndicator from './SoulIndicator';
 import LoadingAnimation from './LoadingAnimation';
@@ -22,10 +22,12 @@ export default function LandingPage() {
 
   // 導航處理函數
   const handleNavigation = (path) => {
-    // 模擬導航到對應頁面
-    console.log(`導航到: ${path}`);
-    // 之後可以實作實際的路由導航
-    // router.push(path);
+    router.push(path);
+  };
+
+  const handleSocialLogin = (provider) => {
+    const targetUrl = `https://filess.io/oauth/${provider}?app=SoulMiles`;
+    window.open(targetUrl, '_blank', 'noopener,noreferrer');
   };
 
   // 顯示載入動畫
@@ -185,8 +187,53 @@ export default function LandingPage() {
           </div>
         </div>
 
-        {/* 功能入口按鈕區域 */}
+        {/* 登入與入口區域 */}
         <div className="w-full max-w-md space-y-2 sm:space-y-3 flex-shrink-0 mb-2 sm:mb-4">
+          <section id="login" className="login-panel gothic-border">
+            <div>
+              <p className="text-xs text-soul-glow/70 uppercase tracking-widest">
+                filess.io · 安全航海資料庫
+              </p>
+              <h3 className="text-lg font-semibold text-soul-glow mt-1 mb-3">
+                以 Google / FB 登入
+              </h3>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button
+                onClick={() => handleSocialLogin('google')}
+                className="social-login-button google"
+                aria-label="使用 Google 登入"
+              >
+                <span>G</span> 連結 Google
+              </button>
+              <button
+                onClick={() => handleSocialLogin('facebook')}
+                className="social-login-button facebook"
+                aria-label="使用 Facebook 登入"
+              >
+                <span>f</span> 連結 Facebook
+              </button>
+            </div>
+          </section>
+
+          {/* 航海資訊入口 */}
+          <button
+            onClick={() => handleNavigation('/dashboard')}
+            className="gothic-button w-full py-3 sm:py-4 px-4 sm:px-6 rounded-lg text-left"
+          >
+            <div className="flex items-center gap-2 sm:gap-3">
+              <span className="text-xl sm:text-2xl">🚩</span>
+              <div className="flex-1">
+                <h3 className="text-sm sm:text-base md:text-lg font-bold text-soul-glow mb-0.5 sm:mb-1">
+                  航海資訊
+                </h3>
+                <p className="text-xs sm:text-sm text-soul-glow/70">
+                  進入儀表板，掌握天氣、交通與推薦
+                </p>
+              </div>
+            </div>
+          </button>
+
           {/* 藏寶圖尋蹤 */}
           <button
             onClick={() => handleNavigation('/routes')}
