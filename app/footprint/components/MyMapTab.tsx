@@ -1,10 +1,10 @@
-import MyMapTabData from './MyMapTabData';
+import MyMapTabClient from './MyMapTabClient';
 
 /**
- * MyMapTab - 我的地圖 Tab 內容 (Server Component 入口)
- * 在服務器端獲取數據並傳遞給 Client Component
+ * MyMapTab - 我的地圖 Tab 內容
+ * 直接渲染 Client Component，數據從 API Route 獲取
  */
 export default function MyMapTab() {
-  return <MyMapTabData />;
+  return <MyMapTabClient />;
 }
 

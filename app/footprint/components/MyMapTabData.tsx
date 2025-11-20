@@ -1,4 +1,5 @@
 import { prisma } from '../../../lib/prisma';
+import { auth } from '../../../lib/auth';
 import MyMapTabClient from './MyMapTabClient';
 
 /**
@@ -9,9 +10,6 @@ export default async function MyMapTabData() {
   let userId: string | null = null;
 
   try {
-    // 動態導入 auth，避免在模組載入時就執行驗證
-    const { auth } = await import('../../../lib/auth');
-    
     // 獲取當前用戶的 session
     const session = await auth();
     

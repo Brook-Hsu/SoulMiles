@@ -32,7 +32,20 @@ export async function GET() {
       },
     });
 
-    return NextResponse.json({ records });
+    // 轉換日期為字符串以便序列化
+    const formattedRecords = records.map((record) => ({
+      id: record.id,
+      name: record.name,
+      description: record.description,
+      coordinate: record.coordinate,
+      Create_time: record.Create_time.toISOString(),
+      pictures: record.pictures.map((pic) => ({
+        id: pic.id,
+        picture: pic.picture,
+      })),
+    }));
+
+    return NextResponse.json({ records: formattedRecords });
   } catch (error) {
     console.error('獲取 MapRecord 失敗:', error);
     return NextResponse.json(

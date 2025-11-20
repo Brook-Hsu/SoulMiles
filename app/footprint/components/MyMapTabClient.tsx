@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import FootprintMap from './FootprintMap';
 import InteractiveFlipBook from './InteractiveFlipBook';
@@ -20,19 +20,42 @@ interface MapRecordPicture {
   picture: string | null;
 }
 
-interface MyMapTabClientProps {
-  records: MapRecord[];
-}
-
 /**
  * MyMapTabClient - Client Component
  * 包含地圖顯示、印記按鈕、互動翻書組件
+ * 從 API Route 獲取數據
  */
-export default function MyMapTabClient({ records }: MyMapTabClientProps) {
+export default function MyMapTabClient() {
   const router = useRouter();
+  const [records, setRecords] = useState<MapRecord[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showMapRecordModal, setShowMapRecordModal] = useState(false);
   const [mapRecordMode, setMapRecordMode] = useState<'input' | 'edit' | null>(null);
   const [selectedRecord, setSelectedRecord] = useState<MapRecord | null>(null);
+
+  // 從 API 獲取數據
+  useEffect(() => {
+    const fetchRecords = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch('/api/footprint/map-records');
+        if (response.ok) {
+          const data = await response.json();
+          setRecords(data.records || []);
+        } else {
+          // 如果未登入或其他錯誤，設置為空陣列
+          setRecords([]);
+        }
+      } catch (error) {
+        console.error('獲取 MapRecord 失敗:', error);
+        setRecords([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRecords();
+  }, []);
 
   const handleImprintClick = () => {
     setSelectedRecord(null);
@@ -63,10 +86,32 @@ export default function MyMapTabClient({ records }: MyMapTabClientProps) {
     setShowMapRecordModal(true);
   };
 
-  const handleSuccess = () => {
-    // 刷新數據：重新獲取頁面數據
-    router.refresh();
+  const handleSuccess = async () => {
+    // 刷新數據：重新從 API 獲取數據
+    try {
+      const response = await fetch('/api/footprint/map-records');
+      if (response.ok) {
+        const data = await response.json();
+        setRecords(data.records || []);
+      }
+    } catch (error) {
+      console.error('刷新 MapRecord 失敗:', error);
+    }
   };
+
+  // 載入中顯示
+  if (loading) {
+    return (
+      <div className="flex flex-col gap-4 mb-16 sm:mb-20">
+        <div className="w-full h-[400px] sm:h-[500px] relative rounded-lg overflow-hidden border border-[#f0d9b5]/30">
+          <FootprintMap />
+        </div>
+        <div className="w-full flex items-center justify-center py-8">
+          <p className="text-[#f7e7c7]/70">載入中...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4 mb-16 sm:mb-20">

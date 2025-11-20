@@ -21,8 +21,8 @@ const providers: any[] = [];
 
 // 只有在憑證存在時才添加 Google Provider
 if (googleClientId && googleClientSecret) {
-  // 在開發環境中輸出配置信息（僅用於調試，不輸出完整 Secret）
-  if (process.env.NODE_ENV === 'development') {
+  // 在開發環境中輸出配置信息（僅用於調試，不輸出完整 Secret，僅在服務器端）
+  if (process.env.NODE_ENV === 'development' && typeof window === 'undefined') {
     console.log('[NextAuth Config] Google Client ID:', googleClientId.substring(0, 20) + '...');
     console.log('[NextAuth Config] Google Client Secret:', googleClientSecret ? '已設置' : '未設置');
   }
@@ -37,8 +37,8 @@ if (googleClientId && googleClientSecret) {
   
   providers.push(googleProvider);
 } else {
-  // 在開發環境中輸出警告
-  if (process.env.NODE_ENV === 'development') {
+  // 在開發環境中輸出警告（僅在服務器端）
+  if (process.env.NODE_ENV === 'development' && typeof window === 'undefined') {
     console.warn('[NextAuth Config] Google OAuth 憑證未配置。請檢查 GOOGLE_CLIENT_ID 和 GOOGLE_CLIENT_SECRET 環境變數。');
   }
 }
@@ -116,15 +116,50 @@ export const authOptions = {
     },
   },
   callbacks: {
-    async session({ session, user, token }) {
-      // NextAuth v5 使用 adapter 時，session callback 可能同時有 user 和 token
-      // 優先使用 user.id，如果沒有則使用 token.sub
-      const userId = user?.id || token?.sub || token?.userId;
+    async jwt({ token, user, account }) {
+      // 在首次登入時，user 對象可用
+      // 將 user id 保存到 token 中
+      if (user) {
+        token.userId = user.id;
+        token.id = user.id;
+      }
+      // 如果使用 database adapter，token.sub 可能已經包含 user id
+      if (token.sub && !token.userId) {
+        token.userId = token.sub;
+        token.id = token.sub;
+      }
+      return token;
+    },
+    async session({ session, token, user }) {
+      // NextAuth v5 使用 database adapter 時，session callback 可能同時有 user 和 token
+      // 優先使用 user.id（database adapter 提供），其次使用 token
+      let userId: string | undefined;
       
-      if (userId) {
+      if (user?.id) {
+        // 使用 database adapter 時，user 對象可用
+        userId = user.id;
+      } else if (token?.userId || token?.id || token?.sub) {
+        // 如果沒有 user 對象，從 token 中獲取
+        userId = (token.userId || token.id || token.sub) as string;
+      } else if (session?.user?.email) {
+        // 如果都沒有，從 email 查詢 database
         try {
           const dbUser = await prisma.user.findUnique({
-            where: { id: userId as string },
+            where: { email: session.user.email },
+            select: { id: true },
+          });
+          if (dbUser) {
+            userId = dbUser.id;
+          }
+        } catch (error) {
+          console.error('從 email 查詢用戶失敗:', error);
+        }
+      }
+      
+      if (userId && session.user) {
+        try {
+          const dbUser = await prisma.user.findUnique({
+            where: { id: userId },
             select: {
               coin: true,
               IsActive: true,
@@ -134,7 +169,7 @@ export const authOptions = {
             },
           });
 
-          if (dbUser && session.user) {
+          if (dbUser) {
             // 擴展 session.user 以包含自定義欄位
             (session.user as any).id = userId;
             (session.user as any).coin = dbUser.coin;
@@ -142,19 +177,17 @@ export const authOptions = {
             (session.user as any).Google_Oath = dbUser.Google_Oath;
             (session.user as any).UserName = dbUser.UserName;
             (session.user as any).Field = dbUser.Field;
+          } else {
+            // 即使找不到 dbUser，也要設置 user.id
+            (session.user as any).id = userId;
           }
         } catch (error) {
           console.error('獲取用戶資料失敗:', error);
+          // 即使出錯，也要設置 user.id
+          (session.user as any).id = userId;
         }
       }
       return session;
-    },
-    async jwt({ token, user }) {
-      // 在 JWT token 中保存 user id
-      if (user) {
-        token.userId = user.id;
-      }
-      return token;
     },
   },
   secret: process.env.AUTH_SECRET || 'agAEIhrYpa2F0QneVhZq/ugGncS6lcBtNcBfezU3CmQ=',
