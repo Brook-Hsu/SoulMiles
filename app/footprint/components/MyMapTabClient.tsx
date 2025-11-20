@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import FootprintMap from './FootprintMap';
 import InteractiveFlipBook from './InteractiveFlipBook';
 import MapRecordModal from './MapRecordModal';
@@ -9,6 +10,7 @@ interface MapRecord {
   id: string;
   name: string | null;
   description: string | null;
+  coordinate: string | null;
   Create_time: string;
   pictures: MapRecordPicture[];
 }
@@ -27,14 +29,19 @@ interface MyMapTabClientProps {
  * 包含地圖顯示、印記按鈕、互動翻書組件
  */
 export default function MyMapTabClient({ records }: MyMapTabClientProps) {
+  const router = useRouter();
   const [showMapRecordModal, setShowMapRecordModal] = useState(false);
   const [mapRecordMode, setMapRecordMode] = useState<'input' | 'edit' | null>(null);
+  const [selectedRecord, setSelectedRecord] = useState<MapRecord | null>(null);
 
   const handleImprintClick = () => {
+    setSelectedRecord(null);
+    setMapRecordMode(null);
     setShowMapRecordModal(true);
   };
 
   const handleInputClick = () => {
+    setSelectedRecord(null);
     setMapRecordMode('input');
     setShowMapRecordModal(true);
   };
@@ -42,6 +49,17 @@ export default function MyMapTabClient({ records }: MyMapTabClientProps) {
   const handleEditClick = () => {
     setMapRecordMode('edit');
     setShowMapRecordModal(true);
+  };
+
+  const handleRecordClick = (record: MapRecord) => {
+    setSelectedRecord(record);
+    setMapRecordMode('edit');
+    setShowMapRecordModal(true);
+  };
+
+  const handleSuccess = () => {
+    // 刷新數據：重新獲取頁面數據
+    router.refresh();
   };
 
   return (
@@ -53,7 +71,7 @@ export default function MyMapTabClient({ records }: MyMapTabClientProps) {
 
       {/* 命運之書 - 直接嵌入 */}
       <div className="w-full">
-        <InteractiveFlipBook records={records} />
+        <InteractiveFlipBook records={records} onRecordClick={handleRecordClick} />
       </div>
 
       {/* 功能按鈕區域 */}
@@ -75,12 +93,15 @@ export default function MyMapTabClient({ records }: MyMapTabClientProps) {
       {showMapRecordModal && (
         <MapRecordModal
           mode={mapRecordMode}
+          record={selectedRecord}
           onClose={() => {
             setShowMapRecordModal(false);
             setMapRecordMode(null);
+            setSelectedRecord(null);
           }}
           onInputClick={handleInputClick}
           onEditClick={handleEditClick}
+          onSuccess={handleSuccess}
         />
       )}
     </div>

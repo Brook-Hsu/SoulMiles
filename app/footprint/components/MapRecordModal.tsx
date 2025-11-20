@@ -3,18 +3,33 @@
 import { useState, useEffect } from 'react';
 import Modal from '../../../components/Modal';
 
+interface MapRecord {
+  id: string;
+  name: string | null;
+  description: string | null;
+  coordinate: string | null;
+  pictures: MapRecordPicture[];
+}
+
+interface MapRecordPicture {
+  id: string;
+  picture: string | null;
+}
+
 interface MapRecordModalProps {
   mode: 'input' | 'edit' | null;
+  record?: MapRecord | null;
   onClose: () => void;
   onInputClick: () => void;
   onEditClick: () => void;
+  onSuccess?: () => void;
 }
 
 /**
  * MapRecordModal - 足跡記錄模態視窗
  * 包含選擇「輸入」或「編輯」的初始狀態，以及實際的輸入/編輯表單
  */
-export default function MapRecordModal({ mode, onClose, onInputClick, onEditClick }: MapRecordModalProps) {
+export default function MapRecordModal({ mode, record, onClose, onInputClick, onEditClick, onSuccess }: MapRecordModalProps) {
   const [showModeSelection, setShowModeSelection] = useState(mode === null);
   const [currentMode, setCurrentMode] = useState<'input' | 'edit' | null>(mode);
   const [name, setName] = useState('');
@@ -22,6 +37,21 @@ export default function MapRecordModal({ mode, onClose, onInputClick, onEditClic
   const [pictures, setPictures] = useState<string[]>([]);
   const [currentPicture, setCurrentPicture] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // 當進入編輯模式且有記錄時，載入現有數據
+  useEffect(() => {
+    if (currentMode === 'edit' && record) {
+      setName(record.name || '');
+      setDescription(record.description || '');
+      setPictures(record.pictures.map(pic => pic.picture || '').filter(Boolean));
+    } else if (currentMode === 'input') {
+      // 重置表單
+      setName('');
+      setDescription('');
+      setPictures([]);
+      setCurrentPicture('');
+    }
+  }, [currentMode, record]);
 
   // 如果是初始狀態，顯示模式選擇
   if (showModeSelection || currentMode === null) {
@@ -121,42 +151,70 @@ export default function MapRecordModal({ mode, onClose, onInputClick, onEditClic
 
     setLoading(true);
     try {
-      // 獲取當前位置
+      // 獲取當前位置（僅在輸入模式下，編輯模式保留原有座標）
       let coordinate: string | null = null;
-      if (typeof window !== 'undefined' && navigator.geolocation) {
-        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject);
-        });
-        coordinate = `${position.coords.latitude},${position.coords.longitude}`;
+      if (currentMode === 'input') {
+        if (typeof window !== 'undefined' && navigator.geolocation) {
+          try {
+            const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+              navigator.geolocation.getCurrentPosition(resolve, reject);
+            });
+            coordinate = `${position.coords.latitude},${position.coords.longitude}`;
+          } catch (error) {
+            console.error('獲取位置失敗:', error);
+            // 位置獲取失敗不阻止提交
+          }
+        }
+      } else if (currentMode === 'edit' && record) {
+        // 編輯模式保留原有座標
+        coordinate = record.coordinate;
       }
 
-      const response = await fetch('/api/footprint/map-records', {
-        method: 'POST',
+      const isEdit = currentMode === 'edit' && record;
+      const url = '/api/footprint/map-records';
+      const method = isEdit ? 'PUT' : 'POST';
+      const body = isEdit
+        ? {
+            id: record.id,
+            name,
+            description,
+            coordinate,
+            pictures,
+          }
+        : {
+            name,
+            description,
+            coordinate,
+            pictures,
+          };
+
+      const response = await fetch(url, {
+        method,
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          name,
-          description,
-          coordinate,
-          pictures,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (response.ok) {
-        alert('足跡記錄已保存');
+        alert(isEdit ? '足跡記錄已更新' : '足跡記錄已保存');
         onClose();
         // 重置表單
         setName('');
         setDescription('');
         setPictures([]);
+        setCurrentPicture('');
+        // 觸發成功回調以刷新數據
+        if (onSuccess) {
+          onSuccess();
+        }
       } else {
         const error = await response.json();
-        alert(`保存失敗: ${error.error || '未知錯誤'}`);
+        alert(`${isEdit ? '更新' : '保存'}失敗: ${error.error || '未知錯誤'}`);
       }
     } catch (error) {
-      console.error('保存足跡記錄失敗:', error);
-      alert('保存失敗，請稍後再試');
+      console.error(`${currentMode === 'edit' ? '更新' : '保存'}足跡記錄失敗:`, error);
+      alert(`${currentMode === 'edit' ? '更新' : '保存'}失敗，請稍後再試`);
     } finally {
       setLoading(false);
     }

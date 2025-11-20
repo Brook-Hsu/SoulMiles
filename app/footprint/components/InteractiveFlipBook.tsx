@@ -18,13 +18,14 @@ interface MapRecordPicture {
 
 interface InteractiveFlipBookProps {
   records: MapRecord[];
+  onRecordClick?: (record: MapRecord) => void;
 }
 
 /**
  * InteractiveFlipBook - 可拖曳翻頁的互動書籍組件
  * 實現真實的拖曳翻頁動畫效果
  */
-export default function InteractiveFlipBook({ records }: InteractiveFlipBookProps) {
+export default function InteractiveFlipBook({ records, onRecordClick }: InteractiveFlipBookProps) {
   const [currentPage, setCurrentPage] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [flipDirection, setFlipDirection] = useState<'left' | 'right' | null>(null);
@@ -199,9 +200,23 @@ export default function InteractiveFlipBook({ records }: InteractiveFlipBookProp
           {/* 頁面內容 */}
           <div className="relative z-10 space-y-4">
             <div className="mb-4">
-              <h2 className="text-2xl sm:text-3xl font-bold text-[#fbbf24] mb-2" style={{ fontFamily: 'serif' }}>
-                {record.name || '未命名地點'}
-              </h2>
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl sm:text-3xl font-bold text-[#fbbf24] mb-2" style={{ fontFamily: 'serif' }}>
+                  {record.name || '未命名地點'}
+                </h2>
+                {onRecordClick && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRecordClick(record);
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-[#fbbf24]/20 text-[#fbbf24] hover:bg-[#fbbf24]/30 transition-colors text-sm border border-[#fbbf24]/40"
+                    title="編輯此記錄"
+                  >
+                    編輯
+                  </button>
+                )}
+              </div>
               <div className="h-1 w-20 bg-gradient-to-r from-[#fbbf24] to-transparent mb-4" />
             </div>
 
