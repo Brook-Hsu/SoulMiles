@@ -203,11 +203,12 @@ export default function FootprintMap() {
     <div className="w-full h-full relative">
       {typeof window !== 'undefined' && userIcon && footprintIcon && (
         <MapContainer
-          center={mapCenter}
+          center={mapCenter as [number, number]}
           zoom={mapZoom}
           style={{ height: '100%', width: '100%', minHeight: '400px' }}
           className="rounded-lg overflow-hidden z-0"
           scrollWheelZoom={true}
+          key={`${mapCenter[0]}-${mapCenter[1]}-${mapZoom}`}
         >
           <MapResizeHandler />
           {/* CartoDB Dark Matter 暗色風格圖層 - 符合哥德式主題 */}
