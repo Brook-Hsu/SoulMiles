@@ -1,4 +1,5 @@
 import './globals.css'
+import SessionProvider from '../components/SessionProvider'
 
 export const metadata = {
   title: 'SoulMiles - 迷霧中的靈魂之旅',
@@ -8,7 +9,11 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="zh-TW">
-      <body>{children}</body>
+      <body>
+        <SessionProvider>
+          {children}
+        </SessionProvider>
+      </body>
     </html>
   )
 }
