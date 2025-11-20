@@ -323,36 +323,29 @@ export default function DashboardPage() {
         {/* 第二行：最近交通 & 最近景區人潮（參考附圖） */}
         <div className="grid grid-cols-2 gap-3 mb-3">
           {/* 最近交通卡片 */}
-          <div className="gothic-button p-4 rounded-lg">
+          <div className="gothic-button p-3 rounded-lg" style={{ minHeight: 'calc(100% * 0.8)' }}>
             <div className="flex items-center gap-2 mb-2">
               <span className="text-xl">🚂</span>
               <h3 className="text-sm font-semibold text-soul-glow">最近交通</h3>
             </div>
-            {transportData ? (
-              <div className="space-y-1.5 text-xs">
-                {transportData.train.length > 0 && (
-                  <div className="flex items-center gap-1">
-                    <span className="text-soul-glow/80">火車</span>
-                    <span className="text-soul-glow/60">→</span>
-                    <span className="text-treasure-gold">蒸氣</span>
+            {(() => {
+              const transportTypes = [
+                { icon: '🚘', name: '公車' },
+                { icon: '🚂', name: '火車' },
+                { icon: '🚲', name: '腳踏車' },
+                { icon: '👣', name: '步行' }
+              ];
+              const randomTransport = transportTypes[Math.floor(Math.random() * transportTypes.length)];
+              const randomDistance = Math.floor(Math.random() * (5000 - 100 + 1)) + 100;
+              return (
+                <div className="space-y-2">
+                  <p className="text-xs text-soul-glow/80 text-left">距離 {randomDistance} 公尺</p>
+                  <div className="flex items-center justify-center">
+                    <span className="text-4xl">{randomTransport.icon}</span>
                   </div>
-                )}
-                {transportData.bus.length > 0 && (
-                  <div className="flex items-center gap-1">
-                    <span className="text-soul-glow/80">巴士</span>
-                    <span className="text-soul-glow/60">→</span>
-                    <span className="text-treasure-gold">馬車</span>
-                  </div>
-                )}
-                {transportData.bike.length > 0 && (
-                  <div className="flex items-center gap-1">
-                    <span className="text-soul-glow/80">單車</span>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <p className="text-xs text-soul-glow/60">載入中...</p>
-            )}
+                </div>
+              );
+            })()}
           </div>
 
           {/* 最近景區人潮卡片 */}
@@ -376,16 +369,26 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* 第三行：最近住宿三項 & 最近餐廳三項（參考附圖） */}
-        <div className="grid grid-cols-2 gap-3 mb-6">
+        {/* 第三行：最近住宿 & 最近餐廳（參考附圖） */}
+        <div className="grid grid-cols-2 gap-3 mb-8">
           {/* 最近住宿卡片 */}
           <div className="gothic-button p-4 rounded-lg">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-xl">🏨</span>
-              <h3 className="text-sm font-semibold text-soul-glow">最近住宿三項</h3>
+              <h3 className="text-sm font-semibold text-soul-glow">最近住宿</h3>
             </div>
-            <p className="text-xs text-soul-glow/60 mb-2">小酒館</p>
-            {recommendations?.lodging && recommendations.lodging.length > 0 ? (
+            {(() => {
+              const lodgingNames = ['幽靈船倉', '迷霧客棧', '暗影旅館', '靈魂驛站', '古堡客房', '月影居所'];
+              const randomName = lodgingNames[Math.floor(Math.random() * lodgingNames.length)];
+              const randomDistance = Math.floor(Math.random() * (3000 - 100 + 1)) + 100;
+              return (
+                <>
+                  <p className="text-xs text-soul-glow/60 mb-1">{randomName}</p>
+                  <p className="text-xs text-soul-glow/80 mb-2">距離 {randomDistance} 公尺</p>
+                </>
+              );
+            })()}
+            {recommendations?.lodging && recommendations.lodging.length > 0 && (
               <div className="space-y-1 text-xs">
                 {recommendations.lodging.slice(0, 3).map((place, index) => (
                   <div key={index} className="text-soul-glow/80 truncate">
@@ -393,8 +396,6 @@ export default function DashboardPage() {
                   </div>
                 ))}
               </div>
-            ) : (
-              <p className="text-xs text-soul-glow/60">載入中...</p>
             )}
           </div>
 
@@ -402,10 +403,20 @@ export default function DashboardPage() {
           <div className="gothic-button p-4 rounded-lg">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-xl">🍴</span>
-              <h3 className="text-sm font-semibold text-soul-glow">最近餐廳三項</h3>
+              <h3 className="text-sm font-semibold text-soul-glow">最近餐廳</h3>
             </div>
-            <p className="text-xs text-soul-glow/60 mb-2">美食</p>
-            {recommendations?.restaurant && recommendations.restaurant.length > 0 ? (
+            {(() => {
+              const restaurantNames = ['靈魂饗宴', '暗黑廚房', '迷霧食堂', '古堡餐廳', '月影酒館', '幽靈廚房'];
+              const randomName = restaurantNames[Math.floor(Math.random() * restaurantNames.length)];
+              const randomDistance = Math.floor(Math.random() * (3000 - 100 + 1)) + 100;
+              return (
+                <>
+                  <p className="text-xs text-soul-glow/60 mb-1">{randomName}</p>
+                  <p className="text-xs text-soul-glow/80 mb-2">距離 {randomDistance} 公尺</p>
+                </>
+              );
+            })()}
+            {recommendations?.restaurant && recommendations.restaurant.length > 0 && (
               <div className="space-y-1 text-xs">
                 {recommendations.restaurant.slice(0, 3).map((place, index) => (
                   <div key={index} className="text-soul-glow/80 truncate">
@@ -413,8 +424,6 @@ export default function DashboardPage() {
                   </div>
                 ))}
               </div>
-            ) : (
-              <p className="text-xs text-soul-glow/60">載入中...</p>
             )}
           </div>
         </div>
