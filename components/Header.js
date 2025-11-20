@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Modal from './Modal';
+import GoogleSignInButton from './GoogleSignInButton';
 
 const menuItems = [
   {
@@ -57,9 +58,7 @@ export default function Header() {
           onClose={() => setIsModalOpen(false)}
           primaryAction={
             <div className="mt-4 space-y-2">
-              <button className="w-full rounded-lg bg-[#fbbf24] py-2 text-sm font-semibold text-[#1b0e07] shadow-lg">
-                以 Google 免密碼登入
-              </button>
+              <GoogleSignInButton onModalClose={() => setIsModalOpen(false)} />
               <button className="w-full rounded-lg border border-[#fbbf24]/50 py-2 text-sm font-semibold text-[#f6d8a7]">
                 以 Facebook 免密碼登入
               </button>
