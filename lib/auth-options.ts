@@ -54,20 +54,8 @@ export const authOptions = {
   },
   trustHost: true,
   debug: process.env.NODE_ENV === 'development',
-  // 確保在開發環境中輸出配置信息（僅用於調試）
-  ...(process.env.NODE_ENV === 'development' && {
-    logger: {
-      error(error) {
-        console.error('[NextAuth Error]', error);
-      },
-      warn(code) {
-        console.warn('[NextAuth Warn]', code);
-      },
-      debug(code, metadata) {
-        console.log('[NextAuth Debug]', code, metadata);
-      },
-    },
-  }),
+  // 移除 logger 配置以符合 NextAuth v5 API
+  // NextAuth v5 會使用默認的 logger 行為
   events: {
     async createUser({ user }) {
       // 當新用戶被創建時，確保 Google_Oath 欄位被正確設置
