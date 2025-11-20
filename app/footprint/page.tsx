@@ -2,10 +2,15 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import Header from '../../components/Header';
 import SubNavbar from './components/SubNavbar';
-import MyMapTab from './components/MyMapTab';
 import QuestTab from './components/QuestTab';
+
+// 動態導入 MyMapTab，避免在 Client Component 中直接導入 Server Component
+const MyMapTab = dynamic(() => import('./components/MyMapTab'), {
+  ssr: true,
+});
 
 /**
  * 足跡之光頁面
