@@ -13,17 +13,17 @@ const MapContainer = dynamic(
 const TileLayer = dynamic(
   () => import('react-leaflet').then((mod) => mod.TileLayer),
   { ssr: false }
-);
+) as React.ComponentType<any>;
 
 const Marker = dynamic(
   () => import('react-leaflet').then((mod) => mod.Marker),
   { ssr: false }
-);
+) as React.ComponentType<any>;
 
 const Popup = dynamic(
   () => import('react-leaflet').then((mod) => mod.Popup),
   { ssr: false }
-);
+) as React.ComponentType<any>;
 
 // 地圖尺寸處理組件
 function MapResizeHandler() {
