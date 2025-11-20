@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '../../../../lib/prisma';
+import { auth } from '../../../../lib/auth';
 
 /**
  * 完成任務
@@ -7,12 +8,20 @@ import { prisma } from '../../../../lib/prisma';
  */
 export async function POST(request: Request) {
   try {
+    // 獲取當前用戶的 session
+    const session = await auth();
+    
+    // 檢查用戶是否已登入
+    if (!session || !session.user || !(session.user as any).id) {
+      return NextResponse.json(
+        { error: '請先登入' },
+        { status: 401 }
+      );
+    }
+
+    const userId = (session.user as any).id;
     const body = await request.json();
     const { taskId } = body;
-
-    // TODO: 從 session 或 token 獲取 user_id
-    // 目前使用臨時的 user_id，實際應該從認證系統獲取
-    const userId = 'temp-user-id'; // 需要替換為實際的 user_id
 
     if (!taskId) {
       return NextResponse.json(
