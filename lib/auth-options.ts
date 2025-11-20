@@ -13,8 +13,9 @@ import { prisma } from './prisma';
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
-// 初始化 PrismaAdapter
-const adapter = PrismaAdapter(prisma) as Adapter;
+// 只有在 DATABASE_URL 存在時才初始化 PrismaAdapter
+// 如果沒有 DATABASE_URL，使用 undefined（NextAuth v5 支持沒有 adapter）
+const adapter = process.env.DATABASE_URL ? (PrismaAdapter(prisma) as Adapter) : undefined;
 
 // 初始化 providers 陣列
 const providers: any[] = [];
