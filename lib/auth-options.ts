@@ -8,14 +8,33 @@ import { prisma } from './prisma';
  * 包含所有認證相關的配置，包括 providers, callbacks, events 等
  */
 
+// 輔助函數：檢查 prisma 是否可用
+function isPrismaAvailable(): boolean {
+  return (
+    process.env.DATABASE_URL !== undefined &&
+    prisma !== undefined &&
+    typeof prisma.user !== 'undefined' &&
+    typeof prisma.account !== 'undefined' &&
+    typeof prisma.user.findUnique === 'function'
+  );
+}
+
 // Google OAuth 憑證
 // 從環境變數讀取，不提供 fallback 值以確保安全性
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
-// 只有在 DATABASE_URL 存在時才初始化 PrismaAdapter
-// 如果沒有 DATABASE_URL，使用 undefined（NextAuth v5 支持沒有 adapter）
-const adapter = process.env.DATABASE_URL ? (PrismaAdapter(prisma) as Adapter) : undefined;
+// 只有在 DATABASE_URL 存在且 prisma 有效時才初始化 PrismaAdapter
+// 如果沒有 DATABASE_URL 或 prisma 初始化失敗，使用 undefined（NextAuth v5 支持沒有 adapter）
+let adapter: Adapter | undefined;
+try {
+  if (isPrismaAvailable()) {
+    adapter = PrismaAdapter(prisma) as Adapter;
+  }
+} catch (error) {
+  console.error('[NextAuth Config] PrismaAdapter 初始化失敗:', error);
+  adapter = undefined;
+}
 
 // 初始化 providers 陣列
 const providers: any[] = [];
@@ -60,6 +79,11 @@ export const authOptions = {
   events: {
     async createUser({ user }) {
       // 當新用戶被創建時，確保 Google_Oath 欄位被正確設置
+      // 只有在 prisma 可用時才執行資料庫操作
+      if (!isPrismaAvailable()) {
+        return;
+      }
+
       try {
         if (user.email) {
           // 查找對應的 Account 以獲取 Google providerAccountId
@@ -89,6 +113,11 @@ export const authOptions = {
     },
     async linkAccount({ account, user }) {
       // 當帳號被連結時，更新 Google_Oath
+      // 只有在 prisma 可用時才執行資料庫操作
+      if (!isPrismaAvailable()) {
+        return;
+      }
+
       try {
         if (account.provider === 'google' && account.providerAccountId) {
           await prisma.user.update({
@@ -130,8 +159,9 @@ export const authOptions = {
       } else if (token?.userId || token?.id || token?.sub) {
         // 如果沒有 user 對象，從 token 中獲取
         userId = (token.userId || token.id || token.sub) as string;
-      } else if (session?.user?.email) {
+      } else if (session?.user?.email && isPrismaAvailable()) {
         // 如果都沒有，從 email 查詢 database
+        // 只有在 prisma 可用時才執行資料庫操作
         try {
           const dbUser = await prisma.user.findUnique({
             where: { email: session.user.email },
@@ -146,33 +176,39 @@ export const authOptions = {
       }
       
       if (userId && session.user) {
-        try {
-          const dbUser = await prisma.user.findUnique({
-            where: { id: userId },
-            select: {
-              coin: true,
-              IsActive: true,
-              Google_Oath: true,
-              UserName: true,
-              Field: true,
-            },
-          });
+        // 只有在 prisma 可用時才執行資料庫操作
+        if (isPrismaAvailable()) {
+          try {
+            const dbUser = await prisma.user.findUnique({
+              where: { id: userId },
+              select: {
+                coin: true,
+                IsActive: true,
+                Google_Oath: true,
+                UserName: true,
+                Field: true,
+              },
+            });
 
-          if (dbUser) {
-            // 擴展 session.user 以包含自定義欄位
-            (session.user as any).id = userId;
-            (session.user as any).coin = dbUser.coin;
-            (session.user as any).IsActive = dbUser.IsActive;
-            (session.user as any).Google_Oath = dbUser.Google_Oath;
-            (session.user as any).UserName = dbUser.UserName;
-            (session.user as any).Field = dbUser.Field;
-          } else {
-            // 即使找不到 dbUser，也要設置 user.id
+            if (dbUser) {
+              // 擴展 session.user 以包含自定義欄位
+              (session.user as any).id = userId;
+              (session.user as any).coin = dbUser.coin;
+              (session.user as any).IsActive = dbUser.IsActive;
+              (session.user as any).Google_Oath = dbUser.Google_Oath;
+              (session.user as any).UserName = dbUser.UserName;
+              (session.user as any).Field = dbUser.Field;
+            } else {
+              // 即使找不到 dbUser，也要設置 user.id
+              (session.user as any).id = userId;
+            }
+          } catch (error) {
+            console.error('獲取用戶資料失敗:', error);
+            // 即使出錯，也要設置 user.id
             (session.user as any).id = userId;
           }
-        } catch (error) {
-          console.error('獲取用戶資料失敗:', error);
-          // 即使出錯，也要設置 user.id
+        } else {
+          // 如果 prisma 不可用，至少設置 user.id
           (session.user as any).id = userId;
         }
       }
