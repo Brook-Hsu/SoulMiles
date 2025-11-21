@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { prisma } from '../../../../lib/prisma';
 import { auth } from '../../../../lib/auth';
 
+// 強制動態路由，避免建置時嘗試靜態生成
+export const dynamic = 'force-dynamic';
+
 /**
  * 獲取使用者的所有 MapRecord 數據（包含 MapRecordPicture）
  */
@@ -46,8 +49,12 @@ export async function GET() {
     }));
 
     return NextResponse.json({ records: formattedRecords });
-  } catch (error) {
+  } catch (error: any) {
     console.error('獲取 MapRecord 失敗:', error);
+    // 如果是資料庫連接錯誤，返回空陣列而不是錯誤
+    if (error?.message?.includes('Environment variable') || error?.message?.includes('DATABASE_URL')) {
+      return NextResponse.json({ records: [] }, { status: 200 });
+    }
     return NextResponse.json(
       { error: '獲取記錄失敗' },
       { status: 500 }

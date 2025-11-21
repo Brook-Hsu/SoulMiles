@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { prisma } from '../../../../lib/prisma';
 import { auth } from '../../../../lib/auth';
 
+// 強制動態路由，避免建置時嘗試靜態生成
+export const dynamic = 'force-dynamic';
+
 /**
  * 完成任務
  * 更新 UserTask 表的 isDone 狀態，並增加使用者的 coin

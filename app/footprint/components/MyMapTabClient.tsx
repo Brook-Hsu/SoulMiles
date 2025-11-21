@@ -20,21 +20,31 @@ interface MapRecordPicture {
   picture: string | null;
 }
 
+interface MyMapTabClientProps {
+  records?: MapRecord[];
+}
+
 /**
  * MyMapTabClient - Client Component
  * 包含地圖顯示、印記按鈕、互動翻書組件
- * 從 API Route 獲取數據
+ * 從 API Route 獲取數據，或使用傳入的 records prop
  */
-export default function MyMapTabClient() {
+export default function MyMapTabClient({ records: initialRecords }: MyMapTabClientProps = {}) {
   const router = useRouter();
-  const [records, setRecords] = useState<MapRecord[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [records, setRecords] = useState<MapRecord[]>(initialRecords || []);
+  const [loading, setLoading] = useState(!initialRecords);
   const [showMapRecordModal, setShowMapRecordModal] = useState(false);
   const [mapRecordMode, setMapRecordMode] = useState<'input' | 'edit' | null>(null);
   const [selectedRecord, setSelectedRecord] = useState<MapRecord | null>(null);
 
-  // 從 API 獲取數據
+  // 從 API 獲取數據（只有在沒有初始 records 時才獲取）
   useEffect(() => {
+    // 如果已經有初始 records，跳過 API 請求
+    if (initialRecords) {
+      setLoading(false);
+      return;
+    }
+
     const fetchRecords = async () => {
       try {
         setLoading(true);
@@ -55,7 +65,7 @@ export default function MyMapTabClient() {
     };
 
     fetchRecords();
-  }, []);
+  }, [initialRecords]);
 
   const handleImprintClick = () => {
     setSelectedRecord(null);

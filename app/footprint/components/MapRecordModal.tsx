@@ -68,6 +68,7 @@ export default function MapRecordModal({ mode, record, records = [], onClose, on
         title="編輯足跡記錄"
         subtitle="選擇要編輯的記錄"
         onClose={onClose}
+        primaryAction={null}
       >
         <div className="space-y-2 max-h-[400px] overflow-y-auto">
           {records.length === 0 ? (
@@ -143,6 +144,7 @@ export default function MapRecordModal({ mode, record, records = [], onClose, on
         title="印記"
         subtitle="選擇您的操作"
         onClose={onClose}
+        primaryAction={null}
       >
         <div className="space-y-3">
           <button
