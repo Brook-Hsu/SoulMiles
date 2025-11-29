@@ -673,10 +673,38 @@
     stroke: currentColor;
   }
 
+  .route-footer__icon--active {
+    color: #fbbf24;
+    transform: translateY(-2px);
+  }
+
   .route-footer__label {
     font-size: 0.7rem;
     text-align: center;
     white-space: nowrap;
+  }
+
+  /* 翻書動畫 */
+  .flip-animation {
+    animation: flipPage 0.3s ease-in-out;
+  }
+
+  @keyframes flipPage {
+    0% {
+      transform: perspective(1000px) rotateY(0deg);
+    }
+    50% {
+      transform: perspective(1000px) rotateY(-90deg);
+    }
+    100% {
+      transform: perspective(1000px) rotateY(0deg);
+    }
+  }
+
+  /* 3D 透視效果 */
+  .perspective-1000 {
+    perspective: 1000px;
+    transform-style: preserve-3d;
   }
 }
 

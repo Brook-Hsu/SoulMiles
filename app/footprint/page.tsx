@@ -1,14 +1,24 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import Header from '../../components/Header';
+import SubNavbar from './components/SubNavbar';
+import QuestTab from './components/QuestTab';
+
+// 動態導入 MyMapTab，避免在 Client Component 中直接導入 Server Component
+const MyMapTab = dynamic(() => import('./components/MyMapTab'), {
+  ssr: true,
+});
 
 /**
- * 靈魂兌換所頁面
- * 整合旅遊資訊並提供兌換功能
+ * 足跡之光頁面
+ * 包含 TopNav 和 SubNavbar，以及兩個主要 Tab 內容
  */
-export default function ExchangePage() {
+export default function FootprintPage() {
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState<'myMap' | 'quest'>('myMap');
 
   return (
     <div className="route-page text-[#f7e7c7]">
@@ -16,25 +26,20 @@ export default function ExchangePage() {
       <div className="route-page__veil" />
 
       <div className="route-page__content">
+        {/* TopNav */}
         <Header />
 
-        {/* 標題區域 */}
-        <div className="w-full text-center mb-4">
-          <h1 className="text-2xl sm:text-3xl font-bold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-soul-glow via-gothic-purple to-treasure-gold">
-            💎 靈魂兌換所
-          </h1>
-          <p className="text-xs sm:text-sm text-soul-glow/60">
-            淨化污穢，兌換專屬榮光
-          </p>
+        {/* SubNavbar - 子導航欄 */}
+        <div className="w-full mb-4">
+          <SubNavbar activeTab={activeTab} onTabChange={setActiveTab} />
         </div>
 
-        {/* 內容區域 */}
-        <div className="flex-1 w-full mb-4">
-          <div className="gothic-button p-6 rounded-lg text-center">
-            <p className="text-soul-glow/80">靈魂兌換所功能開發中...</p>
-          </div>
+        {/* 頁面內容區域 */}
+        <div className="flex-1 w-full">
+          {activeTab === 'myMap' ? <MyMapTab /> : <QuestTab />}
         </div>
 
+        {/* 底部導航欄 */}
         <footer className="route-footer">
           <button
             onClick={() => router.push('/routes')}
@@ -49,7 +54,7 @@ export default function ExchangePage() {
           </button>
           <button
             onClick={() => router.push('/footprint')}
-            className="route-footer__icon"
+            className="route-footer__icon route-footer__icon--active"
             aria-label="足跡之光"
           >
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -59,16 +64,16 @@ export default function ExchangePage() {
             <span className="route-footer__label">足跡之光</span>
           </button>
           <button
-            onClick={() => router.push('/exchange')}
+            onClick={() => router.push('/dashboard')}
             className="route-footer__icon"
-            aria-label="靈魂兌換所"
+            aria-label="心魂監控台"
           >
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
-              <line x1="3" y1="6" x2="21" y2="6" />
-              <path d="M16 10a4 4 0 0 1-8 0" />
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <line x1="3" y1="9" x2="21" y2="9" />
+              <line x1="9" y1="21" x2="9" y2="9" />
             </svg>
-            <span className="route-footer__label">靈魂兌換所</span>
+            <span className="route-footer__label">心魂監控台</span>
           </button>
         </footer>
       </div>
