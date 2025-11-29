@@ -142,6 +142,9 @@ model Task {
   description String?    @db.Text
   coordinate  String?    @db.Text
   Coin        Int        @default(0)
+  isTemporary Boolean    @default(false) // 是否為臨時任務（由好友足跡產生）
+  relatedUserId String?  // 相關的使用者 ID（如果是臨時任務，記錄是哪位好友的足跡）
+  relatedMapRecordId String? // 相關的 MapRecord ID
   Create_time DateTime   @default(now())
   Update_time DateTime   @default(now()) @updatedAt
   userTasks   UserTask[]

@@ -41,12 +41,23 @@ export default function QuestList({ tasks, onViewTask, loading }: QuestListProps
       {tasks.map((task) => (
         <div
           key={task.id}
-          className="gothic-button p-4 rounded-lg border border-[#f0d9b5]/30 hover:border-[#fbbf24]/50 transition-colors"
+          className={`gothic-button p-4 rounded-lg border transition-colors ${
+            task.isTemporary
+              ? 'border-sky-400/70 bg-sky-900/30 hover:border-sky-300/90'
+              : 'border-[#f0d9b5]/30 hover:border-[#fbbf24]/50'
+          }`}
         >
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
-              <h4 className="text-base font-semibold text-[#f7e7c7] mb-1">
-                {task.name || '未命名任務'}
+              <h4 className="text-base font-semibold mb-1">
+                <span className={task.isTemporary ? 'text-sky-300' : 'text-[#f7e7c7]'}>
+                  {task.name || '未命名任務'}
+                </span>
+                {task.isTemporary && (
+                  <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-400/50 align-middle">
+                    臨時任務
+                  </span>
+                )}
               </h4>
               {task.description && (
                 <p className="text-sm text-[#f0d9b5]/70 line-clamp-2">
