@@ -128,7 +128,7 @@ export default function LandingPage() {
                   藏寶圖尋蹤
                 </h3>
                 <p className="text-xs sm:text-sm text-soul-glow/70">
-                  航向迷霧，尋找潮酷路線
+                  探索推薦路線，發現好玩景點
                 </p>
               </div>
             </div>
@@ -145,7 +145,7 @@ export default function LandingPage() {
                   足跡之光
                 </h3>
                 <p className="text-xs sm:text-sm text-soul-glow/70">
-                  足跡灑下，照亮秘境寶藏
+                  記錄旅遊足跡，分享美好回憶
                 </p>
               </div>
             </div>
@@ -162,7 +162,7 @@ export default function LandingPage() {
                   心魂監控台
                 </h3>
                 <p className="text-xs sm:text-sm text-soul-glow/70">
-                  監控靈魂狀態，掌握迷霧動向
+                  查看天氣交通，掌握出遊資訊
                 </p>
               </div>
             </div>
