@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession, signOut, signIn } from 'next-auth/react';
 import Modal from './Modal';
@@ -21,31 +21,6 @@ export default function Header() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
-
-  // 獲取未讀通知數量
-  useEffect(() => {
-    if (session?.user?.email) {
-      loadUnreadCount();
-      // 每 30 秒自動刷新未讀數量
-      const interval = setInterval(loadUnreadCount, 30000);
-      return () => clearInterval(interval);
-    } else {
-      setUnreadCount(0);
-    }
-  }, [session]);
-
-  const loadUnreadCount = async () => {
-    try {
-      const response = await fetch('/api/notifications/unread-count');
-      if (response.ok) {
-        const data = await response.json();
-        setUnreadCount(data.unreadCount || 0);
-      }
-    } catch (error) {
-      console.error('獲取未讀通知數量失敗:', error);
-    }
-  };
 
   const handleSignOut = async () => {
     await signOut({ callbackUrl: '/' });
@@ -68,10 +43,6 @@ export default function Header() {
             alt="SoulMiles Logo" 
             className="h-9 w-9 rounded-full object-cover shadow-inner"
           />
-          <div>
-            <p className="text-[0.65rem] uppercase tracking-[0.3em] text-[#f7e7c7]/70">Miles</p>
-            <p className="text-xs text-[#f7e7c7]">迷霧儀錶板</p>
-          </div>
         </button>
         <button
           onClick={() => setIsModalOpen(true)}
@@ -126,10 +97,10 @@ export default function Header() {
                 <GoogleSignInButton onModalClose={() => setIsModalOpen(false)} />
                 <button
                   onClick={async () => {
-                    await signIn('facebook', { callbackUrl: window.location.origin });
-                    setIsModalOpen(false);
+                    if (onModalClose) onModalClose();
+                    await signIn('facebook', { callbackUrl: window.location.origin, redirect: true });
                   }}
-                  className="w-full rounded-lg border border-[#fbbf24]/50 py-2 text-sm font-semibold text-[#f6d8a7] hover:border-[#fbbf24] hover:bg-[#fbbf24]/10 transition-colors"
+                  className="w-full rounded-lg border border-[#fbbf24]/50 py-2 text-sm font-semibold text-[#f6d8a7] hover:border-[#fbbf24] transition-colors"
                 >
                   以 Facebook 免密碼登入
                 </button>
@@ -148,24 +119,12 @@ export default function Header() {
                   if (item.label === '會員中心') {
                     router.push('/member-center');
                     setIsModalOpen(false);
-                  } else if (item.label === '訊息通知') {
-                    router.push('/notifications');
-                    setIsModalOpen(false);
                   }
                 }}
-                className="w-full rounded-xl border border-[#fbbf24]/30 bg-[#2b1a10]/70 px-4 py-3 text-left hover:border-[#fbbf24] transition-colors relative"
+                className="w-full rounded-xl border border-[#fbbf24]/30 bg-[#2b1a10]/70 px-4 py-3 text-left hover:border-[#fbbf24] transition-colors"
               >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-[#fbbf24]">{item.label}</p>
-                    <p className="text-xs text-[#f7e7c7]/70">{item.description}</p>
-                  </div>
-                  {item.label === '訊息通知' && unreadCount > 0 && (
-                    <span className="px-2 py-1 bg-[#fbbf24] text-[#1b0e07] rounded-full text-xs font-bold min-w-[24px] text-center">
-                      {unreadCount > 99 ? '99+' : unreadCount}
-                    </span>
-                  )}
-                </div>
+                <p className="text-sm font-semibold text-[#fbbf24]">{item.label}</p>
+                <p className="text-xs text-[#f7e7c7]/70">{item.description}</p>
               </button>
             ))}
           </div>

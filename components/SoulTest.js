@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Header from './Header';
+import SoulTestQ3 from './SoulTestQ3';
 
 const questions = [
   {
@@ -177,6 +178,20 @@ export default function SoulTest() {
     }
   };
 
+  const handleQ3Complete = (q3Answers) => {
+    // 將 Q3 的答案整合到 answers 中
+    setAnswers((prev) => ({
+      ...prev,
+      ...q3Answers,
+      karma: q3Answers.karma || 'core', // 為了兼容性，設置一個默認值
+    }));
+
+    // 自動推進到下一題
+    setTimeout(() => {
+      setCurrentStep((prev) => Math.min(prev + 1, questions.length - 1));
+    }, 300);
+  };
+
   const handleBack = () => {
     setCurrentStep((prev) => Math.max(prev - 1, 0));
     setIsSummaryReady(false);
@@ -216,32 +231,37 @@ export default function SoulTest() {
           </div>
 
           {!isSummaryReady ? (
-            <div className="space-y-4">
-              <div>
-                <p className="text-xs text-[#f7e7c7]/60">第 {currentStep + 1} / {questions.length} 題</p>
-                <h2 className="text-xl font-semibold text-[#fde8b0]">{currentQuestion.title}</h2>
-              </div>
+            currentStep === 2 ? (
+              // Q3: 使用新的 MBTI 靈魂能量維度組件
+              <SoulTestQ3 onComplete={handleQ3Complete} />
+            ) : (
+              <div className="space-y-4">
+                <div>
+                  <p className="text-xs text-[#f7e7c7]/60">第 {currentStep + 1} / {questions.length} 題</p>
+                  <h2 className="text-xl font-semibold text-[#fde8b0]">{currentQuestion.title}</h2>
+                </div>
 
-              <div className="space-y-3">
-                {currentQuestion.options.map((option) => {
-                  const isActive = answers[currentQuestion.key] === option.value;
-                  return (
-                    <button
-                      key={option.value}
-                      onClick={() => handleSelectOption(option.value)}
-                      className={`w-full rounded-2xl border px-4 py-3 text-left transition-all ${
-                        isActive
-                          ? 'border-[#fbbf24] bg-[#fbbf24]/10 text-[#fbbf24]'
-                          : 'border-white/10 bg-white/5 text-white/80 hover:border-[#fbbf24]/40'
-                      }`}
-                    >
-                      <p className="font-semibold">{option.label}</p>
-                      <p className="text-xs text-[#f7e7c7]/60">{option.note}</p>
-                    </button>
-                  );
-                })}
+                <div className="space-y-3">
+                  {currentQuestion.options.map((option) => {
+                    const isActive = answers[currentQuestion.key] === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        onClick={() => handleSelectOption(option.value)}
+                        className={`w-full rounded-2xl border px-4 py-3 text-left transition-all ${
+                          isActive
+                            ? 'border-[#fbbf24] bg-[#fbbf24]/10 text-[#fbbf24]'
+                            : 'border-white/10 bg-white/5 text-white/80 hover:border-[#fbbf24]/40'
+                        }`}
+                      >
+                        <p className="font-semibold">{option.label}</p>
+                        <p className="text-xs text-[#f7e7c7]/60">{option.note}</p>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )
           ) : (
             <SummaryPanel answers={answers} onBack={handleBack} onSubmit={handleSubmit} />
           )}

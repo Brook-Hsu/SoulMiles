@@ -3,7 +3,6 @@
 import { useMemo } from 'react';
 import dynamic from 'next/dynamic';
 
-// 動態導入 Marker 以避免 SSR 問題
 const Marker = dynamic(
   () => import('react-leaflet').then((mod) => mod.Marker),
   { ssr: false }
@@ -14,16 +13,10 @@ interface StarMarkerProps {
   id: string;
 }
 
-/**
- * 金星圖標 - 八芒星圖案（不透明，閃閃發光）
- */
 function createStarIcon(animationDelay: number = 0) {
-  // 確保只在客戶端執行
-  if (typeof window === 'undefined') return null;
-  
-  // 動態導入 Leaflet 以避免 SSR 問題
-  const L = require('leaflet');
-  
+  if (typeof window === 'undefined') return null; // SSR check
+  const L = require('leaflet'); // Dynamically import Leaflet
+
   return L.divIcon({
     className: 'star-marker',
     html: `
@@ -64,13 +57,8 @@ function createStarIcon(animationDelay: number = 0) {
   });
 }
 
-/**
- * 金星標記組件 - 在迷霧中閃閃發光
- */
 export default function StarMarker({ position, id }: StarMarkerProps) {
-  // 為每個金星生成唯一的動畫延遲（基於 ID）
   const animationDelay = useMemo(() => {
-    // 使用 ID 的 hash 來生成穩定的延遲值
     let hash = 0;
     for (let i = 0; i < id.length; i++) {
       hash = ((hash << 5) - hash) + id.charCodeAt(i);

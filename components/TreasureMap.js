@@ -19,26 +19,43 @@ const defaultSummaries = {
   '孤獨艦長': '全船只剩你一人，與星圖對話找到出口。',
 };
 
-const itineraries = {
+// 縣市名稱對應（從 Google Maps 查詢參數提取）
+const CITY_NAME_MAPPING = {
+  'Taipei': 'Taipei',
+  'Keelung': '基隆',
+  'Yilan': '宜蘭',
+  'Taichung': '台中',
+  'Changhua': '彰化',
+  'Yunlin': '雲林',
+  'Kaohsiung': '高雄',
+  'Tainan': '台南',
+  'Pingtung': '屏東',
+  'Hualien': '花蓮',
+  'Taitung': '台東',
+  'Green+Island': '台東', // 綠島屬於台東
+};
+
+// 預設行程（當 API 無法取得資料時使用）
+const defaultItineraries = {
   north: [
-    { title: '霧燈集結點', log: '在幽暗碼頭校準羅盤', link: 'https://maps.google.com/?q=Taipei' },
-    { title: '黑曜市集', log: '以星象換取神秘坐標', link: 'https://maps.google.com/?q=Keelung' },
-    { title: '極光懸崖', log: '完成儀式取得最終密令', link: 'https://maps.google.com/?q=Yilan' },
+    { title: '霧燈集結點', log: '在幽暗碼頭校準羅盤', link: 'https://maps.google.com/?q=Taipei', city: 'Taipei' },
+    { title: '黑曜市集', log: '以星象換取神秘坐標', link: 'https://maps.google.com/?q=Keelung', city: 'Keelung' },
+    { title: '極光懸崖', log: '完成儀式取得最終密令', link: 'https://maps.google.com/?q=Yilan', city: 'Yilan' },
   ],
   central: [
-    { title: '迷霧中樞', log: '收集盟友情報', link: 'https://maps.google.com/?q=Taichung' },
-    { title: '聖殿遺跡', log: '破解地脈謎語', link: 'https://maps.google.com/?q=Changhua' },
-    { title: '靈魂熔爐', log: '鍛造下一段旅程', link: 'https://maps.google.com/?q=Yunlin' },
+    { title: '迷霧中樞', log: '收集盟友情報', link: 'https://maps.google.com/?q=Taichung', city: 'Taichung' },
+    { title: '聖殿遺跡', log: '破解地脈謎語', link: 'https://maps.google.com/?q=Changhua', city: 'Changhua' },
+    { title: '靈魂熔爐', log: '鍛造下一段旅程', link: 'https://maps.google.com/?q=Yunlin', city: 'Yunlin' },
   ],
   south: [
-    { title: '赤焰船塢', log: '啟動防護符文', link: 'https://maps.google.com/?q=Kaohsiung' },
-    { title: '熔礦之眼', log: '利用熔岩熱能定位', link: 'https://maps.google.com/?q=Tainan' },
-    { title: '黑曜海峽', log: '與幽影締結契約', link: 'https://maps.google.com/?q=Pingtung' },
+    { title: '赤焰船塢', log: '啟動防護符文', link: 'https://maps.google.com/?q=Kaohsiung', city: 'Kaohsiung' },
+    { title: '熔礦之眼', log: '利用熔岩熱能定位', link: 'https://maps.google.com/?q=Tainan', city: 'Tainan' },
+    { title: '黑曜海峽', log: '與幽影締結契約', link: 'https://maps.google.com/?q=Pingtung', city: 'Pingtung' },
   ],
   east: [
-    { title: '潮汐聖環', log: '在潮聲中聽取神諭', link: 'https://maps.google.com/?q=Hualien' },
-    { title: '月光航道', log: '借用月石折射下一站', link: 'https://maps.google.com/?q=Taitung' },
-    { title: '星落崖口', log: '完成最後的航海簽章', link: 'https://maps.google.com/?q=Green+Island' },
+    { title: '潮汐聖環', log: '在潮聲中聽取神諭', link: 'https://maps.google.com/?q=Hualien', city: 'Hualien' },
+    { title: '月光航道', log: '借用月石折射下一站', link: 'https://maps.google.com/?q=Taitung', city: 'Taitung' },
+    { title: '星落崖口', log: '完成最後的航海簽章', link: 'https://maps.google.com/?q=Green+Island', city: 'Taitung' },
   ],
 };
 
@@ -58,6 +75,8 @@ export default function TreasureMap() {
   const [currentStopIndex, setCurrentStopIndex] = useState(0);
   const [isNearDestination, setIsNearDestination] = useState(false);
   const [showCompletion, setShowCompletion] = useState(false);
+  const [itineraries, setItineraries] = useState(defaultItineraries);
+  const [loadingAttractions, setLoadingAttractions] = useState({});
 
   const regionKey = useMemo(() => {
     if (location.includes('北')) return 'north';
@@ -67,8 +86,90 @@ export default function TreasureMap() {
     return 'north';
   }, [location]);
 
-  const routePlan = itineraries[regionKey] || itineraries.north;
-  const currentStop = routePlan[currentStopIndex];
+  // 從 Google Maps 連結提取城市名稱
+  const extractCityFromLink = (link) => {
+    try {
+      const url = new URL(link);
+      const query = url.searchParams.get('q') || '';
+      return CITY_NAME_MAPPING[query] || query;
+    } catch {
+      return null;
+    }
+  };
+
+  // 從 API 取得景點資料
+  const fetchAttractionForCity = async (cityName) => {
+    if (!cityName) return null;
+    
+    // 避免重複請求
+    if (loadingAttractions[cityName]) return null;
+    
+    setLoadingAttractions(prev => ({ ...prev, [cityName]: true }));
+    
+    try {
+      const response = await fetch(`/api/tourist-attractions?city=${encodeURIComponent(cityName)}`);
+      if (!response.ok) {
+        throw new Error(`API 請求失敗: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.success && data.attraction) {
+        const attraction = data.attraction;
+        const googleMapLink = attraction.position?.lat && attraction.position?.lon
+          ? `https://maps.google.com/?q=${attraction.position.lat},${attraction.position.lon}`
+          : `https://maps.google.com/?q=${encodeURIComponent(attraction.name + ' ' + attraction.address)}`;
+        
+        return {
+          title: attraction.name || '未知景點',
+          log: attraction.description?.substring(0, 30) || attraction.address || '探索秘境',
+          link: googleMapLink,
+          city: cityName,
+          address: attraction.address,
+          picture: attraction.pictureUrl,
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error(`[TreasureMap] 取得 ${cityName} 景點失敗:`, error);
+      return null;
+    } finally {
+      setLoadingAttractions(prev => {
+        const next = { ...prev };
+        delete next[cityName];
+        return next;
+      });
+    }
+  };
+
+  // 當行程變化時，載入真實景點資料
+  useEffect(() => {
+    const loadAttractions = async () => {
+      const defaultRoute = defaultItineraries[regionKey] || defaultItineraries.north;
+      const updatedRoute = await Promise.all(
+        defaultRoute.map(async (stop) => {
+          const cityName = extractCityFromLink(stop.link);
+          if (cityName) {
+            const attraction = await fetchAttractionForCity(cityName);
+            if (attraction) {
+              return attraction;
+            }
+          }
+          return stop;
+        })
+      );
+
+      setItineraries(prev => ({
+        ...prev,
+        [regionKey]: updatedRoute,
+      }));
+    };
+
+    loadAttractions();
+  }, [regionKey]);
+
+  const routePlan = itineraries[regionKey] || defaultItineraries[regionKey] || defaultItineraries.north;
+  const currentStop = routePlan[currentStopIndex] || routePlan[0];
   const isMissionComplete = currentStopIndex >= routePlan.length - 1;
 
   useEffect(() => {

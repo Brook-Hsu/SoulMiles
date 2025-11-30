@@ -3,8 +3,6 @@
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from './Header';
-import SoulIndicator from './SoulIndicator';
-import LoadingAnimation from './LoadingAnimation';
 
 const ROUTE_BG = '/images/routes/route-bg.jpg';
 const HERO_IMAGE = '/images/routes/hero-oracle.jpg';
@@ -60,8 +58,6 @@ const heroSlides = [
 
 export default function TreasureRoutesPage() {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(true);
-  const [soulLevel] = useState(74);
   const [activeIndex, setActiveIndex] = useState(1);
   const [touchStartX, setTouchStartX] = useState(null);
 
@@ -100,12 +96,6 @@ export default function TreasureRoutesPage() {
     setTouchStartX(null);
   };
 
-  const handleLoadingComplete = () => setIsLoading(false);
-
-  if (isLoading) {
-    return <LoadingAnimation onComplete={handleLoadingComplete} />;
-  }
-
   return (
     <div className="route-page text-[#f7e7c7]">
       <div
@@ -125,11 +115,11 @@ export default function TreasureRoutesPage() {
             <h1 className="route-title route-title--centered">藏寶圖尋蹤 · Arcane Route</h1>
           </div>
           <div className="route-hero-visual">
+            {/* 閃爍的藍色光環 - 放在容器外層 */}
+            <div className="route-hero-visual__glow route-hero-visual__glow--outer" />
+            <div className="route-hero-visual__glow route-hero-visual__glow--middle" />
             <div className="route-hero-visual__inner">
               <img src={HERO_IMAGE} alt="占星師" className="route-hero-visual__image" />
-              <div className="route-hero-visual__indicator">
-                <SoulIndicator soulLevel={soulLevel} />
-              </div>
             </div>
           </div>
         </section>
@@ -179,8 +169,8 @@ export default function TreasureRoutesPage() {
                         <div className="route-card__body">
                           <p className="route-card__badge">SoulMiles</p>
                           <h3 className="route-card__title route-card__title--centered">{slide.title}</h3>
-                          <p className="route-card__summary">{slide.mantra}</p>
                         </div>
+                        <p className="route-card__summary">{slide.mantra}</p>
                         <p className="route-card__description">
                           {slide.summary}
                         </p>

@@ -854,26 +854,8 @@ export async function GET(request) {
       // 處理最近的景區
       const place = results[0];
       
-      // 支援新舊兩種 API 格式
-      // 新格式：直接使用 latitude/longitude
-      // 舊格式：使用 geocodes.main.latitude/longitude
-      let placeLat, placeLon;
-      
-      if (place.latitude && place.longitude) {
-        // 新 API 格式
-        placeLat = place.latitude;
-        placeLon = place.longitude;
-      } else if (place.geocodes && place.geocodes.main) {
-        // 舊 API 格式
-        placeLat = place.geocodes.main.latitude;
-        placeLon = place.geocodes.main.longitude;
-      } else {
-        console.warn('景區缺少地理位置資訊', {
-          hasLatitude: !!place.latitude,
-          hasLongitude: !!place.longitude,
-          hasGeocodes: !!place.geocodes,
-          placeKeys: Object.keys(place),
-        });
+      if (!place.geocodes || !place.geocodes.main) {
+        console.warn('景區缺少地理位置資訊');
         return NextResponse.json({ places: [], error: 'invalid_data' });
       }
 
@@ -881,40 +863,29 @@ export async function GET(request) {
       const distance = calculateDistance(
         parseFloat(lat),
         parseFloat(lon),
-        placeLat,
-        placeLon
+        place.geocodes.main.latitude,
+        place.geocodes.main.longitude
       );
 
       // 取得景區詳細資訊
-      // 支援新舊兩種 Place ID 格式
-      const placeId = place.fsq_place_id || place.fsq_id;
       let placeDetails = null;
-      
-      if (placeId) {
-        try {
-          const detailsUrl = `https://places-api.foursquare.com/places/${placeId}`;
-          const detailsResponse = await fetch(detailsUrl, {
-            method: 'GET',
-            headers: {
-              'Accept': 'application/json',
-              'Authorization': `Bearer ${FOURSQUARE_API_KEY}`,
-              'X-Places-Api-Version': '2025-06-17',
-            },
-          });
-
-          if (detailsResponse.ok) {
-            const detailsData = await detailsResponse.json();
-            placeDetails = detailsData;
-          }
-        } catch (error) {
-          console.error(`Error fetching place details for ${placeId}:`, error);
-        }
-      } else {
-        console.warn('景區缺少 Place ID', {
-          hasFsqPlaceId: !!place.fsq_place_id,
-          hasFsqId: !!place.fsq_id,
-          placeKeys: Object.keys(place),
+      try {
+        const detailsUrl = `https://places-api.foursquare.com/places/${place.fsq_id}`;
+        const detailsResponse = await fetch(detailsUrl, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': `Bearer ${FOURSQUARE_API_KEY}`,
+            'X-Places-Api-Version': '2025-06-17',
+          },
         });
+
+        if (detailsResponse.ok) {
+          const detailsData = await detailsResponse.json();
+          placeDetails = detailsData;
+        }
+      } catch (error) {
+        console.error(`Error fetching place details for ${place.fsq_id}:`, error);
       }
 
       // 計算人潮等級
@@ -925,8 +896,8 @@ export async function GET(request) {
           name: place.name,
           distance: Math.round(distance),
           vicinity: place.location?.formatted_address || place.location?.address || '',
-          lat: placeLat,
-          lon: placeLon,
+          lat: place.geocodes.main.latitude,
+          lon: place.geocodes.main.longitude,
           crowdLevel: crowdInfo.level,
           crowdLevelText: crowdInfo.levelText,
           busyPercentage: crowdInfo.percentage,

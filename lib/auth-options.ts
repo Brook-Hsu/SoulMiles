@@ -1,5 +1,4 @@
 import Google from 'next-auth/providers/google';
-import Facebook from 'next-auth/providers/facebook';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import type { Adapter } from 'next-auth/adapters';
 import { prisma } from './prisma';
@@ -24,11 +23,6 @@ function isPrismaAvailable(): boolean {
 // 從環境變數讀取，不提供 fallback 值以確保安全性
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
-
-// Facebook OAuth 憑證
-// 從環境變數讀取，不提供 fallback 值以確保安全性
-const facebookClientId = process.env.FACEBOOK_CLIENT_ID;
-const facebookClientSecret = process.env.FACEBOOK_CLIENT_SECRET;
 
 // 只有在 DATABASE_URL 存在且 prisma 有效時才初始化 PrismaAdapter
 // 如果沒有 DATABASE_URL 或 prisma 初始化失敗，使用 undefined（NextAuth v5 支持沒有 adapter）
@@ -69,28 +63,6 @@ if (googleClientId && googleClientSecret) {
   }
 }
 
-// 只有在憑證存在時才添加 Facebook Provider
-if (facebookClientId && facebookClientSecret) {
-  // 在開發環境中輸出配置信息（僅用於調試，不輸出完整 Secret，僅在服務器端）
-  if (process.env.NODE_ENV === 'development' && typeof window === 'undefined') {
-    console.log('[NextAuth Config] Facebook Client ID:', facebookClientId.substring(0, 20) + '...');
-    console.log('[NextAuth Config] Facebook Client Secret:', facebookClientSecret ? '已設置' : '未設置');
-  }
-
-  // 初始化 Facebook Provider
-  const facebookProvider = Facebook({
-    clientId: facebookClientId,
-    clientSecret: facebookClientSecret,
-  });
-  
-  providers.push(facebookProvider);
-} else {
-  // 在開發環境中輸出警告（僅在服務器端）
-  if (process.env.NODE_ENV === 'development' && typeof window === 'undefined') {
-    console.warn('[NextAuth Config] Facebook OAuth 憑證未配置。請檢查 FACEBOOK_CLIENT_ID 和 FACEBOOK_CLIENT_SECRET 環境變數。');
-  }
-}
-
 // 驗證 providers 不為空（只有在需要認證功能時才驗證）
 // 注意：如果沒有 providers，NextAuth 仍然可以初始化，但無法進行登入
 
@@ -106,7 +78,7 @@ export const authOptions = {
   // NextAuth v5 會使用默認的 logger 行為
   events: {
     async createUser({ user }) {
-      // 當新用戶被創建時，確保 OAuth 欄位被正確設置
+      // 當新用戶被創建時，確保 Google_Oath 欄位被正確設置
       // 只有在 prisma 可用時才執行資料庫操作
       if (!isPrismaAvailable()) {
         return;
@@ -114,117 +86,54 @@ export const authOptions = {
 
       try {
         if (user.email) {
-          // 查找對應的 Account 以獲取 providerAccountId
-          const accounts = await prisma.account.findMany({
+          // 查找對應的 Account 以獲取 Google providerAccountId
+          const account = await prisma.account.findFirst({
             where: {
               userId: user.id,
+              provider: 'google',
             },
           });
 
-          // 更新用戶的 OAuth 欄位（支援 Google 和 Facebook）
-          const updateData: any = {
-            coin: 0,
-            IsActive: true,
-            Update_time: new Date(),
-          };
-
-          const googleAccount = accounts.find((acc) => acc.provider === 'google');
-          if (googleAccount) {
-            updateData.Google_Oath = googleAccount.providerAccountId;
+          if (account) {
+            // 更新用戶的 Google_Oath 欄位
+            await prisma.user.update({
+              where: { id: user.id },
+              data: {
+                Google_Oath: account.providerAccountId,
+                coin: 0,
+                IsActive: true,
+                Update_time: new Date(),
+              },
+            });
           }
-
-          // 如果有 Facebook 帳號，也可以在這裡處理（如果需要 Facebook_Oath 欄位）
-          // const facebookAccount = accounts.find((acc) => acc.provider === 'facebook');
-          // if (facebookAccount) {
-          //   updateData.Facebook_Oath = facebookAccount.providerAccountId;
-          // }
-
-          await prisma.user.update({
-            where: { id: user.id },
-            data: updateData,
-          });
         }
       } catch (error) {
         console.error('初始化新用戶資料失敗:', error);
       }
     },
     async linkAccount({ account, user }) {
-      // 當帳號被連結時，更新對應的 OAuth 欄位
+      // 當帳號被連結時，更新 Google_Oath
       // 只有在 prisma 可用時才執行資料庫操作
       if (!isPrismaAvailable()) {
         return;
       }
 
       try {
-        if (account.providerAccountId) {
-          const updateData: any = {
-            Update_time: new Date(),
-          };
-
-          // 根據 provider 更新對應的欄位
-          if (account.provider === 'google') {
-            updateData.Google_Oath = account.providerAccountId;
-          }
-          // 如果有 Facebook_Oath 欄位，可以在這裡處理
-          // else if (account.provider === 'facebook') {
-          //   updateData.Facebook_Oath = account.providerAccountId;
-          // }
-
+        if (account.provider === 'google' && account.providerAccountId) {
           await prisma.user.update({
             where: { id: user.id },
-            data: updateData,
+            data: {
+              Google_Oath: account.providerAccountId,
+              Update_time: new Date(),
+            },
           });
-
-          if (process.env.NODE_ENV === 'development') {
-            console.log(`[NextAuth] 已連結 ${account.provider} 帳號到用戶: ${user.email || user.id}`);
-          }
         }
       } catch (error) {
-        console.error(`更新用戶 ${account.provider} OAuth 失敗:`, error);
+        console.error('更新用戶 Google_Oath 失敗:', error);
       }
     },
   },
   callbacks: {
-    async signIn({ user, account, profile, email }) {
-      // 如果使用 PrismaAdapter，NextAuth 會自動處理帳號連結
-      // 但我們可以在這裡添加額外的邏輯來確保相同 email 的帳號被正確連結
-      
-      if (!isPrismaAvailable() || !user.email) {
-        return true; // 允許登入，讓 PrismaAdapter 處理
-      }
-
-      try {
-        // 檢查是否存在相同 email 的用戶
-        const existingUser = await prisma.user.findUnique({
-          where: { email: user.email },
-          include: {
-            accounts: {
-              select: { provider: true },
-            },
-          },
-        });
-
-        if (existingUser && account) {
-          // 檢查該 provider 的帳號是否已經連結
-          const existingAccount = existingUser.accounts.find(
-            (acc) => acc.provider === account.provider
-          );
-
-          if (!existingAccount) {
-            // 如果 email 已存在但該 provider 的帳號尚未連結
-            // PrismaAdapter 會自動處理連結，這裡只記錄日誌
-            if (process.env.NODE_ENV === 'development') {
-              console.log(`[NextAuth] 將 ${account.provider} 帳號連結到現有用戶: ${user.email}`);
-            }
-          }
-        }
-      } catch (error) {
-        console.error('[NextAuth] signIn callback 錯誤:', error);
-        // 即使出錯也允許登入，讓 PrismaAdapter 處理
-      }
-
-      return true; // 允許登入
-    },
     async jwt({ token, user, account }) {
       // 在首次登入時，user 對象可用
       // 將 user id 保存到 token 中

@@ -44,20 +44,10 @@ export async function GET() {
     return NextResponse.json({ footprints });
   } catch (error: any) {
     console.error('獲取 MapRecord 失敗:', error);
-    
-    // 處理資料庫連接錯誤（包括帳號被鎖定）
-    const errorMessage = error?.message || '';
-    if (
-      errorMessage.includes('Environment variable') ||
-      errorMessage.includes('DATABASE_URL') ||
-      errorMessage.includes('Access denied') ||
-      errorMessage.includes('Account is locked') ||
-      errorMessage.includes('PrismaClientInitializationError')
-    ) {
-      // 資料庫不可用時，返回空陣列而不是錯誤
+    // 如果是資料庫連接錯誤，返回空陣列而不是錯誤
+    if (error?.message?.includes('Environment variable') || error?.message?.includes('DATABASE_URL')) {
       return NextResponse.json({ footprints: [] }, { status: 200 });
     }
-    
     return NextResponse.json(
       { error: '獲取足跡失敗' },
       { status: 500 }

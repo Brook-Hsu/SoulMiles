@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from './Header';
-import SoulIndicator from './SoulIndicator';
 import LoadingAnimation from './LoadingAnimation';
+import WorldChannelTicker from './WorldChannelTicker';
+import SoulIndicator from './SoulIndicator';
 
 /**
  * LandingPage - SoulMiles 啟動頁面
@@ -12,10 +13,17 @@ import LoadingAnimation from './LoadingAnimation';
  */
 export default function LandingPage() {
   const router = useRouter();
-  const [mistPercentage, setMistPercentage] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [mistPercentage, setMistPercentage] = useState(0);
 
-  // 獲取迷霧去除百分比
+  const handleLoadingComplete = () => {
+    setIsLoading(false);
+  };
+
+  const handleNavigation = (path) => {
+    router.push(path);
+  };
+
   useEffect(() => {
     const fetchMistPercentage = async () => {
       try {
@@ -28,17 +36,8 @@ export default function LandingPage() {
         console.error('獲取迷霧百分比失敗:', error);
       }
     };
-
     fetchMistPercentage();
   }, []);
-
-  const handleLoadingComplete = () => {
-    setIsLoading(false);
-  };
-
-  const handleNavigation = (path) => {
-    router.push(path);
-  };
 
   if (isLoading) {
     return <LoadingAnimation onComplete={handleLoadingComplete} />;
@@ -98,37 +97,36 @@ export default function LandingPage() {
       </div>
 
       <div className="relative z-10 w-full h-full min-h-screen flex flex-col items-center justify-between px-4 py-4 sm:py-6 overflow-hidden">
-        <div className="w-full flex-shrink-0 mb-2 sm:mb-4">
+        <div className="w-full flex-shrink-0">
           <Header />
         </div>
         
-        <div className="w-full text-center flex-shrink-0 mt-2 sm:mt-4">
-          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-1 sm:mb-2 text-transparent bg-clip-text bg-gradient-to-r from-soul-glow via-gothic-purple to-treasure-gold drop-shadow-[0_0_10px_rgba(167,139,250,0.5)]">
-            SoulMiles
-          </h1>
-          <p className="text-xs sm:text-sm md:text-base text-soul-glow/60">
-            迷霧中的靈魂之旅
-          </p>
+        <div className="w-full text-center flex-shrink-0">
+          {/* 世界頻道輪播訊息 */}
+          <div className="flex items-center justify-center">
+            <WorldChannelTicker />
+          </div>
         </div>
 
         <div className="flex-1 flex flex-col items-center justify-center w-full max-w-md overflow-hidden min-h-0 py-2">
-          <div className="relative mb-1 sm:mb-2 animate-float scale-75 sm:scale-100">
-            <svg width="200" height="200" viewBox="0 0 200 200" className="drop-shadow-2xl">
-              <circle cx="100" cy="100" r="95" fill="none" stroke="rgba(167, 139, 250, 0.3)" strokeWidth="2" strokeDasharray="5,5" />
-              <circle cx="100" cy="100" r="85" fill="none" stroke="rgba(107, 70, 193, 0.4)" strokeWidth="1" />
-              <circle cx="100" cy="100" r="75" fill="rgba(10, 10, 26, 0.8)" stroke="rgba(167, 139, 250, 0.5)" strokeWidth="3" />
-              <line x1="100" y1="100" x2="100" y2="40" stroke="rgba(251, 191, 36, 0.8)" strokeWidth="3" strokeLinecap="round" />
-              <line x1="100" y1="100" x2="100" y2="160" stroke="rgba(107, 70, 193, 0.6)" strokeWidth="2" strokeLinecap="round" />
-              <text x="100" y="30" textAnchor="middle" fill="rgba(167, 139, 250, 0.8)" fontSize="16" fontWeight="bold">N</text>
-              <text x="100" y="185" textAnchor="middle" fill="rgba(107, 70, 193, 0.6)" fontSize="14">S</text>
-              <text x="30" y="105" textAnchor="middle" fill="rgba(167, 139, 250, 0.6)" fontSize="14">W</text>
-              <text x="170" y="105" textAnchor="middle" fill="rgba(167, 139, 250, 0.6)" fontSize="14">E</text>
-              <circle cx="100" cy="100" r="5" fill="rgba(167, 139, 250, 0.8)" />
-              <path d="M 100 35 L 95 50 L 100 45 L 105 50 Z" fill="rgba(251, 191, 36, 0.9)" />
-            </svg>
+          {/* Banner 圖片位置 - 請將圖片放在 public/images/banner/landing-banner-removebg.png */}
+          <div className="relative w-full max-w-md flex-shrink-1 min-h-0 flex items-center justify-center">
+            <img 
+              src="/images/banner/landing-banner-removebg.png" 
+              alt="SoulMiles Banner" 
+              className="w-full h-auto max-h-[calc(100vh-400px)] object-contain rounded-2xl shadow-2xl"
+              onError={(e) => {
+                // 如果圖片不存在，顯示佔位符
+                e.target.style.display = 'none';
+                e.target.nextSibling.style.display = 'block';
+              }}
+            />
+            <div className="hidden w-full h-64 bg-gradient-to-br from-gothic-purple/20 to-mist-blue/20 rounded-2xl border border-soul-glow/30 flex items-center justify-center">
+              <p className="text-soul-glow/50 text-sm">請將 banner 圖片放在: public/images/banner/landing-banner-removebg.png</p>
+            </div>
           </div>
-
-          <div className="mb-0 sm:mb-2">
+          {/* 迷霧探索百分比指示器 */}
+          <div className="flex-shrink-0">
             <SoulIndicator soulLevel={mistPercentage} />
           </div>
         </div>
@@ -145,7 +143,7 @@ export default function LandingPage() {
                   藏寶圖尋蹤
                 </h3>
                 <p className="text-xs sm:text-sm text-soul-glow/70">
-                  探索推薦路線，發現好玩景點
+                  航向迷霧，尋找潮酷路線
                 </p>
               </div>
             </div>
@@ -162,7 +160,7 @@ export default function LandingPage() {
                   足跡之光
                 </h3>
                 <p className="text-xs sm:text-sm text-soul-glow/70">
-                  記錄旅遊足跡，分享美好回憶
+                  足跡灑下，照亮秘境寶藏
                 </p>
               </div>
             </div>

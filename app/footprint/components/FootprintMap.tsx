@@ -1,11 +1,10 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
-import { coordinateToGridId } from '../../../lib/utils/gridUtils';
-import FogLayer from './FogLayer';
 import LocateButton from './LocateButton';
+import FogLayer from './FogLayer';
 
 // 動態導入地圖組件以避免 SSR 問題
 const MapContainer = dynamic(
@@ -25,11 +24,6 @@ const Marker = dynamic(
 
 const Popup = dynamic(
   () => import('react-leaflet').then((mod) => mod.Popup),
-  { ssr: false }
-) as React.ComponentType<any>;
-
-const GeoJSON = dynamic(
-  () => import('react-leaflet').then((mod) => mod.GeoJSON),
   { ssr: false }
 ) as React.ComponentType<any>;
 
@@ -68,35 +62,22 @@ interface Footprint {
   description?: string | null;
 }
 
-interface ExploredGrid {
-  gridId: string;
-  coordinate: string;
-  exploredAt: string;
-}
-
-
 /**
- * FootprintMap - 顯示使用者所有足跡點的地圖，包含迷霧散去效果
+ * FootprintMap - 顯示使用者所有足跡點的地圖
  * 使用 Stamen Watercolor 復古水彩風格圖層
  */
 export default function FootprintMap() {
   const [footprints, setFootprints] = useState<Footprint[]>([]);
-  const [exploredGrids, setExploredGrids] = useState<ExploredGrid[]>([]);
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [loading, setLoading] = useState(true);
-  const currentGridIdRef = useRef<string | null>(null);
-  const watchIdRef = useRef<number | null>(null);
+  const [exploredGrids, setExploredGrids] = useState<Array<{ gridId: string; coordinate: string; exploredAt: string }>>([]);
+  const [exploredGridIds, setExploredGridIds] = useState<Set<string>>(new Set());
 
   // 預設中心點（台北）
   const defaultCenter: [number, number] = [25.0330, 121.5654];
   const [mapCenter, setMapCenter] = useState<[number, number]>(defaultCenter);
   const [mapZoom, setMapZoom] = useState(13);
-
-  // 已探索方塊 ID 的 Set（用於快速查詢）
-  const exploredGridIds = useMemo(() => {
-    return new Set(exploredGrids.map((grid) => grid.gridId));
-  }, [exploredGrids]);
 
   // 取得使用者當前位置
   useEffect(() => {
@@ -118,119 +99,46 @@ export default function FootprintMap() {
     }
   }, []);
 
-  // 從 API 獲取 Footprint 數據和已探索方塊（並行請求）
+  // 從 API 獲取 Footprint 數據和已探索方塊 (並行請求)
   useEffect(() => {
     const fetchData = async () => {
+      setLoading(true);
       try {
-        // 並行執行兩個 API 請求
-        const [footprintsResponse, gridsResponse] = await Promise.all([
-          fetch('/api/footprint/footprints'),
-          fetch('/api/footprint/explored-grids'),
-        ]);
-
-        // 處理足跡資料
-        if (footprintsResponse.ok) {
-          const footprintsData = await footprintsResponse.json();
-          setFootprints(footprintsData.footprints || []);
-        }
-
-        // 處理已探索方塊資料
-        if (gridsResponse.ok) {
-          const gridsData = await gridsResponse.json();
-          setExploredGrids(gridsData.grids || []);
-        }
+        await Promise.all([fetchFootprints(), fetchExploredGrids()]);
       } catch (error) {
-        console.error('獲取資料失敗:', error);
+        console.error('獲取地圖數據失敗:', error);
       } finally {
         setLoading(false);
         setMapReady(true);
       }
     };
-
     fetchData();
   }, []);
 
-  // 記錄探索方塊
-  const exploreGrid = useCallback(async (lat: number, lon: number) => {
+  const fetchFootprints = async () => {
     try {
-      const response = await fetch('/api/footprint/explore-grid', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ lat, lon }),
-      });
-
+      const response = await fetch('/api/footprint/footprints');
       if (response.ok) {
         const data = await response.json();
-        if (data.success && data.footprint) {
-          // 如果成功記錄，更新已探索方塊列表
-          if (!data.alreadyExplored) {
-            setExploredGrids((prev) => [
-              {
-                gridId: data.footprint.gridId,
-                coordinate: data.footprint.coordinate,
-                exploredAt: new Date().toISOString(),
-              },
-              ...prev,
-            ]);
-          }
-        }
+        setFootprints(data.footprints || []);
       }
     } catch (error) {
-      console.error('記錄探索方塊失敗:', error);
+      console.error('獲取足跡失敗:', error);
     }
-  }, []);
+  };
 
-  // 位置監聽 - 自動記錄探索的方塊
-  useEffect(() => {
-    if (typeof window === 'undefined' || !navigator.geolocation) return;
-
-    // 先獲取一次位置
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        const gridId = coordinateToGridId(latitude, longitude);
-        if (gridId && gridId !== currentGridIdRef.current) {
-          currentGridIdRef.current = gridId;
-          exploreGrid(latitude, longitude);
-        }
-      },
-      (error) => {
-        console.error('獲取位置失敗:', error);
+  const fetchExploredGrids = async () => {
+    try {
+      const response = await fetch('/api/footprint/explored-grids');
+      if (response.ok) {
+        const data = await response.json();
+        setExploredGrids(data.grids || []);
+        setExploredGridIds(new Set(data.grids?.map((g: any) => g.gridId) || []));
       }
-    );
-
-    // 監聽位置變化（每 30 秒或移動超過 100 公尺）
-    const watchId = navigator.geolocation.watchPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        const gridId = coordinateToGridId(latitude, longitude);
-        
-        // 如果進入新的方塊，記錄探索
-        if (gridId && gridId !== currentGridIdRef.current) {
-          currentGridIdRef.current = gridId;
-          exploreGrid(latitude, longitude);
-        }
-      },
-      (error) => {
-        console.error('位置監聽失敗:', error);
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 30000, // 30 秒
-      }
-    );
-
-    watchIdRef.current = watchId;
-
-    return () => {
-      if (watchIdRef.current !== null) {
-        navigator.geolocation.clearWatch(watchIdRef.current);
-      }
-    };
-  }, [exploreGrid]);
+    } catch (error) {
+      console.error('獲取已探索方塊失敗:', error);
+    }
+  };
 
   // 解析座標字符串為 [lat, lng]
   const parseCoordinate = (coord: string | null): [number, number] | null => {
@@ -319,7 +227,7 @@ export default function FootprintMap() {
   return (
     <div className="w-full h-full relative">
       {typeof window !== 'undefined' && userIcon && footprintIcon && (
-        <MapContainer
+          <MapContainer
           center={mapCenter as [number, number]}
           zoom={mapZoom}
           style={{ height: '100%', width: '100%', minHeight: '400px' }}
@@ -337,12 +245,12 @@ export default function FootprintMap() {
             maxZoom={20}
           />
           
-          {/* 迷霧圖層 - 顯示未探索的方塊 */}
-          {typeof window !== 'undefined' && (
+          {/* 迷霧圖層 - 顯示未探索的方塊 (延遲載入) */}
+          {typeof window !== 'undefined' && mapReady && (
             <FogLayer exploredGridIds={exploredGridIds} />
           )}
 
-          {/* 定位按鈕 - 回到使用者當前位置 */}
+          {/* 回到現在定位按鈕 */}
           {typeof window !== 'undefined' && userLocation && (
             <LocateButton userLocation={userLocation} />
           )}
@@ -355,9 +263,6 @@ export default function FootprintMap() {
                   <strong className="text-purple-600">📍 您的位置</strong>
                   <p className="text-xs mt-1">緯度: {userLocation[0].toFixed(4)}</p>
                   <p className="text-xs">經度: {userLocation[1].toFixed(4)}</p>
-                  {currentGridIdRef.current && (
-                    <p className="text-xs mt-1 text-gray-500">方塊: {currentGridIdRef.current}</p>
-                  )}
                 </div>
               </Popup>
             </Marker>

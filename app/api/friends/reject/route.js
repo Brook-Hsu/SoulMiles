@@ -20,7 +20,7 @@ export async function POST(request) {
 
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
-      select: { id: true, name: true, UserName: true },
+      select: { id: true },
     });
 
     if (!user) {
@@ -55,24 +55,6 @@ export async function POST(request) {
       },
       data: { isRead: true },
     });
-
-    // 建立通知給發送請求的使用者（好友請求被拒絕）
-    const senderUser = await prisma.user.findUnique({
-      where: { id: friendRequest.user_id },
-      select: { id: true, name: true, UserName: true },
-    });
-
-    if (senderUser) {
-      await prisma.notification.create({
-        data: {
-          user_id: friendRequest.user_id,
-          type: 'friend_rejected',
-          title: '好友請求被拒絕',
-          message: `${user.name || user.UserName || '某位使用者'} 拒絕了您的好友請求`,
-          isRead: false,
-        },
-      });
-    }
 
     return NextResponse.json({ message: '好友請求已拒絕' });
   } catch (error) {
