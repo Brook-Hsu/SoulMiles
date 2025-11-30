@@ -43,10 +43,6 @@ export default function Header() {
             alt="SoulMiles Logo" 
             className="h-9 w-9 rounded-full object-cover shadow-inner"
           />
-          <div>
-            <p className="text-[0.65rem] uppercase tracking-[0.3em] text-[#f7e7c7]/70">Miles</p>
-            <p className="text-xs text-[#f7e7c7]">迷霧儀錶板</p>
-          </div>
         </button>
         <button
           onClick={() => setIsModalOpen(true)}

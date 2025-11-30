@@ -110,11 +110,11 @@ export default function LandingPage() {
 
         <div className="flex-1 flex flex-col items-center justify-center w-full max-w-md overflow-hidden min-h-0 py-2">
           {/* Banner 圖片位置 - 請將圖片放在 public/images/banner/landing-banner-removebg.png */}
-          <div className="relative w-full max-w-md mb-4">
+          <div className="relative w-full max-w-md flex-shrink-1 min-h-0 flex items-center justify-center">
             <img 
               src="/images/banner/landing-banner-removebg.png" 
               alt="SoulMiles Banner" 
-              className="w-full h-auto rounded-2xl shadow-2xl"
+              className="w-full h-auto max-h-[calc(100vh-400px)] object-contain rounded-2xl shadow-2xl"
               onError={(e) => {
                 // 如果圖片不存在，顯示佔位符
                 e.target.style.display = 'none';
@@ -126,14 +126,14 @@ export default function LandingPage() {
             </div>
           </div>
           {/* 迷霧探索百分比指示器 */}
-          <div className="mb-0 sm:mb-2">
+          <div className="flex-shrink-0">
             <SoulIndicator soulLevel={mistPercentage} />
           </div>
         </div>
 
         <div className="w-full max-w-md space-y-2 sm:space-y-3 flex-shrink-0 mb-2 sm:mb-4">
           <button
-            onClick={() => handleNavigation('/treasure-map')}
+            onClick={() => handleNavigation('/routes')}
             className="gothic-button w-full py-3 sm:py-4 px-4 sm:px-6 rounded-lg text-left"
           >
             <div className="flex items-center gap-2 sm:gap-3">
