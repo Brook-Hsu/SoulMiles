@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { auth } from '../../../lib/auth';
 import { prisma } from '../../../lib/prisma';
 
+export const dynamic = 'force-dynamic';
+
 // 取得好友列表
 export async function GET(request) {
   try {

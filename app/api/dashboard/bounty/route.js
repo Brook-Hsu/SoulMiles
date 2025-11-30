@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { auth } from '../../../../lib/auth';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * 計算出遊合適度並轉換為懸賞金額
  * 考慮因素：
