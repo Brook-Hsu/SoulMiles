@@ -38,7 +38,7 @@ export default function QuestList({ tasks, onViewTask, loading }: QuestListProps
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 mb-16 sm:mb-20">
       <h3 className="text-lg font-bold text-[#f7e7c7] mb-3">任務列表</h3>
       {tasks.map((task) => (
         <div

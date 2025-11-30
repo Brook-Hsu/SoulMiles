@@ -3,6 +3,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
+import LocateButton from './LocateButton';
 
 // 動態導入地圖組件以避免 SSR 問題
 const MapContainer = dynamic(
@@ -201,6 +202,7 @@ export default function QuestMap({ tasks }: QuestMapProps) {
         style={{ height: '100%', width: '100%', minHeight: '300px' }}
         className="rounded-lg overflow-hidden z-0"
         scrollWheelZoom={true}
+        zoomControl={false}
       >
         <MapResizeHandler />
         {/* CartoDB Dark Matter 暗色風格圖層 - 符合哥德式主題 */}
@@ -210,6 +212,11 @@ export default function QuestMap({ tasks }: QuestMapProps) {
           subdomains="abcd"
           maxZoom={20}
         />
+        
+        {/* 回到現在定位按鈕 */}
+        {typeof window !== 'undefined' && userLocation && (
+          <LocateButton userLocation={userLocation} defaultZoom={mapZoom} />
+        )}
         
         {/* 用戶位置標記 */}
         {userLocation && userLocationIcon && (
