@@ -2,9 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import FootprintMap from './FootprintMap';
+import dynamic from 'next/dynamic';
 import InteractiveFlipBook from './InteractiveFlipBook';
 import MapRecordModal from './MapRecordModal';
+
+// 動態導入 FootprintMap 以避免 SSR 問題（因為它依賴 Leaflet）
+const FootprintMap = dynamic(
+  () => import('./FootprintMap'),
+  { ssr: false }
+);
 
 interface MapRecord {
   id: string;

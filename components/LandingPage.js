@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from './Header';
 import SoulIndicator from './SoulIndicator';
@@ -12,8 +12,25 @@ import LoadingAnimation from './LoadingAnimation';
  */
 export default function LandingPage() {
   const router = useRouter();
-  const [soulLevel] = useState(50);
+  const [mistPercentage, setMistPercentage] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+
+  // 獲取迷霧去除百分比
+  useEffect(() => {
+    const fetchMistPercentage = async () => {
+      try {
+        const response = await fetch('/api/footprint/mist-percentage');
+        if (response.ok) {
+          const data = await response.json();
+          setMistPercentage(data.percentage || 0);
+        }
+      } catch (error) {
+        console.error('獲取迷霧百分比失敗:', error);
+      }
+    };
+
+    fetchMistPercentage();
+  }, []);
 
   const handleLoadingComplete = () => {
     setIsLoading(false);
@@ -112,7 +129,7 @@ export default function LandingPage() {
           </div>
 
           <div className="mb-0 sm:mb-2">
-            <SoulIndicator soulLevel={soulLevel} />
+            <SoulIndicator soulLevel={mistPercentage} />
           </div>
         </div>
 
