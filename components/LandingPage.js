@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from './Header';
 import LoadingAnimation from './LoadingAnimation';
 import WorldChannelTicker from './WorldChannelTicker';
+import SoulIndicator from './SoulIndicator';
 
 /**
  * LandingPage - SoulMiles 啟動頁面
@@ -13,6 +14,7 @@ import WorldChannelTicker from './WorldChannelTicker';
 export default function LandingPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
+  const [mistPercentage, setMistPercentage] = useState(0);
 
   const handleLoadingComplete = () => {
     setIsLoading(false);
@@ -21,6 +23,21 @@ export default function LandingPage() {
   const handleNavigation = (path) => {
     router.push(path);
   };
+
+  useEffect(() => {
+    const fetchMistPercentage = async () => {
+      try {
+        const response = await fetch('/api/footprint/mist-percentage');
+        if (response.ok) {
+          const data = await response.json();
+          setMistPercentage(data.percentage || 0);
+        }
+      } catch (error) {
+        console.error('獲取迷霧百分比失敗:', error);
+      }
+    };
+    fetchMistPercentage();
+  }, []);
 
   if (isLoading) {
     return <LoadingAnimation onComplete={handleLoadingComplete} />;
@@ -92,6 +109,10 @@ export default function LandingPage() {
           <div className="flex items-center justify-center mt-8 sm:mt-10">
             <WorldChannelTicker />
           </div>
+          {/* 迷霧探索百分比指示器 */}
+          <div className="mb-0 sm:mb-2">
+            <SoulIndicator soulLevel={mistPercentage} />
+          </div>
         </div>
 
         <div className="flex-1 flex flex-col items-center justify-center w-full max-w-md overflow-hidden min-h-0 py-2">
@@ -115,7 +136,7 @@ export default function LandingPage() {
 
         <div className="w-full max-w-md space-y-2 sm:space-y-3 flex-shrink-0 mb-2 sm:mb-4">
           <button
-            onClick={() => handleNavigation('/routes')}
+            onClick={() => handleNavigation('/treasure-map')}
             className="gothic-button w-full py-3 sm:py-4 px-4 sm:px-6 rounded-lg text-left"
           >
             <div className="flex items-center gap-2 sm:gap-3">

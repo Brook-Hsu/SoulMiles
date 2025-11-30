@@ -796,5 +796,20 @@
     perspective: 1000px;
     transform-style: preserve-3d;
   }
+
+  /* 迷霧粒子效果 SVG 過濾器定義容器 */
+  .fog-particle-filter-defs {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  /* 金星閃爍動畫 */
+  @keyframes starTwinkle {
+    0%, 100% { opacity: 0.8; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.2); }
+  }
 }
 

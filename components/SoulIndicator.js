@@ -82,32 +82,23 @@ export default function SoulIndicator({ soulLevel = 50 }) {
           animation: 'pulseSoul 2s ease-in-out infinite',
         }}
       >
-        {/* 靈魂符號 - 簡單的星形或光點 */}
-        <div className="absolute inset-0 flex items-center justify-center animate-pulse">
+        {/* 顯示迷霧去除百分比 */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center px-2">
           <div
-            className="text-2xl"
+            className="text-xs sm:text-sm font-medium text-center leading-tight"
             style={{
               color: `rgba(167, 139, 250, ${glowIntensity})`,
               textShadow: `
-                0 0 15px rgba(167, 139, 250, ${glowIntensity}),
-                0 0 25px rgba(167, 139, 250, ${glowIntensity * 0.7}),
-                0 0 35px rgba(251, 191, 36, ${glowIntensity * 0.4})
+                0 0 10px rgba(167, 139, 250, ${glowIntensity}),
+                0 0 20px rgba(167, 139, 250, ${glowIntensity * 0.7}),
+                0 0 30px rgba(251, 191, 36, ${glowIntensity * 0.4})
               `,
             }}
           >
-            ✦
+            <div>已探索</div>
+            <div className="text-base sm:text-lg font-bold mt-0.5">{soulLevel}%</div>
           </div>
         </div>
-      </div>
-
-      {/* 提示文字 */}
-      <div className="absolute -bottom-6 sm:-bottom-8 left-1/2 transform -translate-x-1/2 text-center">
-        <p className="text-xs text-soul-glow/70 font-medium">
-          靈魂純淨度: {soulLevel}%
-        </p>
-        <p className="text-xs text-soul-glow/50 mt-1">
-          {soulLevel >= 70 ? '迷霧已散去' : soulLevel >= 40 ? '迷霧漸散' : '迷霧籠罩'}
-        </p>
       </div>
     </div>
   );

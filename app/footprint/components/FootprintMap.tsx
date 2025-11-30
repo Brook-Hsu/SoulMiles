@@ -3,6 +3,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
+import LocateButton from './LocateButton';
+import FogLayer from './FogLayer';
 
 // 動態導入地圖組件以避免 SSR 問題
 const MapContainer = dynamic(
@@ -69,6 +71,8 @@ export default function FootprintMap() {
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [exploredGrids, setExploredGrids] = useState<Array<{ gridId: string; coordinate: string; exploredAt: string }>>([]);
+  const [exploredGridIds, setExploredGridIds] = useState<Set<string>>(new Set());
 
   // 預設中心點（台北）
   const defaultCenter: [number, number] = [25.0330, 121.5654];
@@ -95,9 +99,20 @@ export default function FootprintMap() {
     }
   }, []);
 
-  // 從 API 獲取 Footprint 數據
+  // 從 API 獲取 Footprint 數據和已探索方塊 (並行請求)
   useEffect(() => {
-    fetchFootprints();
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        await Promise.all([fetchFootprints(), fetchExploredGrids()]);
+      } catch (error) {
+        console.error('獲取地圖數據失敗:', error);
+      } finally {
+        setLoading(false);
+        setMapReady(true);
+      }
+    };
+    fetchData();
   }, []);
 
   const fetchFootprints = async () => {
@@ -109,9 +124,19 @@ export default function FootprintMap() {
       }
     } catch (error) {
       console.error('獲取足跡失敗:', error);
-    } finally {
-      setLoading(false);
-      setMapReady(true);
+    }
+  };
+
+  const fetchExploredGrids = async () => {
+    try {
+      const response = await fetch('/api/footprint/explored-grids');
+      if (response.ok) {
+        const data = await response.json();
+        setExploredGrids(data.grids || []);
+        setExploredGridIds(new Set(data.grids?.map((g: any) => g.gridId) || []));
+      }
+    } catch (error) {
+      console.error('獲取已探索方塊失敗:', error);
     }
   };
 
@@ -202,12 +227,13 @@ export default function FootprintMap() {
   return (
     <div className="w-full h-full relative">
       {typeof window !== 'undefined' && userIcon && footprintIcon && (
-        <MapContainer
+          <MapContainer
           center={mapCenter as [number, number]}
           zoom={mapZoom}
           style={{ height: '100%', width: '100%', minHeight: '400px' }}
           className="rounded-lg overflow-hidden z-0"
           scrollWheelZoom={true}
+          zoomControl={false}
           key={`${mapCenter[0]}-${mapCenter[1]}-${mapZoom}`}
         >
           <MapResizeHandler />
@@ -218,6 +244,16 @@ export default function FootprintMap() {
             subdomains="abcd"
             maxZoom={20}
           />
+          
+          {/* 迷霧圖層 - 顯示未探索的方塊 (延遲載入) */}
+          {typeof window !== 'undefined' && mapReady && (
+            <FogLayer exploredGridIds={exploredGridIds} />
+          )}
+
+          {/* 回到現在定位按鈕 */}
+          {typeof window !== 'undefined' && userLocation && (
+            <LocateButton userLocation={userLocation} />
+          )}
           
           {/* 使用者當前位置 */}
           {userLocation && (
