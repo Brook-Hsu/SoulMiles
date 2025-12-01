@@ -108,14 +108,11 @@ export default function DashboardPage() {
           return res.json();
         })
         .then((data) => {
-          console.log('景區人潮 API 回應:', data);
           // 取最近的景區（API 已經排序）
           const nearestAttraction = data.places?.[0] || null;
           if (nearestAttraction) {
-            console.log('找到最近景區:', nearestAttraction);
             setCrowdData(nearestAttraction);
           } else {
-            console.warn('沒有找到景區資料');
             // 即使沒有資料也設置為 false 以停止載入狀態
             setCrowdData(false);
           }

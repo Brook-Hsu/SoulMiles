@@ -1,6 +1,7 @@
-import { NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { prisma } from '../../../../lib/prisma';
-import { auth } from '../../../../lib/auth';
+import { requireAuth } from '../../../../lib/middleware/auth';
+import { successResponse, ApiErrors } from '../../../../lib/utils/api-response';
 
 // 強制動態路由，避免建置時嘗試靜態生成
 export const dynamic = 'force-dynamic';
@@ -39,21 +40,15 @@ function parseCoordinate(coord: string | null): { lat: number; lon: number } | n
  * POST /api/footprint/friend-tasks
  * body: { lat: number, lon: number }
  */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
-
-    if (!session || !session.user || !(session.user as any).id) {
-      return NextResponse.json({ error: '未登入' }, { status: 401 });
-    }
-
-    const userId = (session.user as any).id as string;
+    const { userId } = await requireAuth(request);
 
     const body = await request.json().catch(() => ({}));
-    const { lat, lon } = body || {};
+    const { lat, lon } = body as { lat?: number; lon?: number } || {};
 
     if (typeof lat !== 'number' || typeof lon !== 'number') {
-      return NextResponse.json({ error: '缺少或格式錯誤的座標資料' }, { status: 400 });
+      return ApiErrors.BAD_REQUEST('缺少或格式錯誤的座標資料');
     }
 
     // 取得好友列表（已接受的雙向好友）
@@ -72,7 +67,7 @@ export async function POST(request: Request) {
     });
 
     if (!friends.length) {
-      return NextResponse.json({ createdTasks: 0, matchedRecords: 0 });
+      return successResponse({ createdTasks: 0, matchedRecords: 0 });
     }
 
     // 取得好友 ID 清單（排除自己，去重複）
@@ -83,7 +78,7 @@ export async function POST(request: Request) {
     );
 
     if (!friendIds.length) {
-      return NextResponse.json({ createdTasks: 0, matchedRecords: 0 });
+      return successResponse({ createdTasks: 0, matchedRecords: 0 });
     }
 
     // 為了避免查詢量過大，只取最近 3 個月的足跡
@@ -106,7 +101,7 @@ export async function POST(request: Request) {
     });
 
     if (!friendRecords.length) {
-      return NextResponse.json({ createdTasks: 0, matchedRecords: 0 });
+      return successResponse({ createdTasks: 0, matchedRecords: 0 });
     }
 
     // 取得好友的基本資料，用於任務名稱/描述
@@ -187,16 +182,19 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json({
+    return successResponse({
       createdTasks,
       matchedRecords,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('檢查好友足跡並建立臨時任務失敗:', error);
-    return NextResponse.json(
-      { error: '檢查好友足跡失敗' },
-      { status: 500 }
-    );
+    
+    // 如果是 API 錯誤回應（來自中間件），直接返回
+    if (error && typeof error === 'object' && 'status' in error) {
+      return error as ReturnType<typeof ApiErrors.UNAUTHORIZED>;
+    }
+    
+    return ApiErrors.INTERNAL_ERROR('檢查好友足跡失敗');
   }
 }
 

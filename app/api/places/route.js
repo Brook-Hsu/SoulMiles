@@ -812,14 +812,6 @@ export async function GET(request) {
           'X-Places-Api-Version': '2025-06-17',
         },
       });
-      
-      // 記錄 API 請求資訊（用於除錯）
-      console.log('Foursquare API 請求:', {
-        url: `${searchUrl}?${searchParams.toString()}`,
-        hasApiKey: !!FOURSQUARE_API_KEY,
-        apiKeyPrefix: FOURSQUARE_API_KEY ? FOURSQUARE_API_KEY.substring(0, 10) + '...' : 'none',
-        status: response.status,
-      });
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -828,20 +820,6 @@ export async function GET(request) {
       }
 
       const data = await response.json();
-      
-      // 記錄完整的 API 回應（用於除錯，僅開發環境）
-      if (process.env.NODE_ENV === 'development') {
-        console.log('Foursquare API 完整回應:', JSON.stringify(data, null, 2));
-      }
-      
-      // 記錄 API 回應結構（用於除錯）
-      console.log('Foursquare API 回應資料:', {
-        hasResults: !!data.results,
-        hasData: !!data.data,
-        resultsLength: data.results?.length || 0,
-        dataLength: data.data?.length || 0,
-        keys: Object.keys(data),
-      });
       
       // 檢查回應格式（Foursquare API v3 可能使用 results 陣列）
       const results = data.results || data.data || [];

@@ -1,6 +1,7 @@
 import { prisma } from '../../../lib/prisma';
 import { auth } from '../../../lib/auth';
 import MyMapTabClient from './MyMapTabClient';
+import '../../../lib/types/auth'; // 載入型別擴展
 
 /**
  * MyMapTabData - Server Component
@@ -14,8 +15,8 @@ export default async function MyMapTabData() {
     const session = await auth();
     
     // 檢查用戶是否已登入
-    if (session && session.user && (session.user as any).id) {
-      userId = (session.user as any).id;
+    if (session && session.user && session.user.id) {
+      userId = session.user.id;
     }
   } catch (error) {
     // 如果 auth 初始化失敗（例如 OAuth 憑證未配置），記錄錯誤但不阻止頁面渲染

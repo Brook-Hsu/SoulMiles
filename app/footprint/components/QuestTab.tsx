@@ -83,17 +83,11 @@ export default function QuestTab() {
         return;
       }
 
-      const data = await response.json();
-      console.log('主要任務刷新回應:', data);
+      const result = await response.json();
+      const data = result.success ? result.data : result;
       
       // 無論是否刷新，都重新獲取任務列表
       await fetchTasks();
-      
-      if (data.refreshed) {
-        console.log('主要任務已刷新');
-      } else if (data.message) {
-        console.log('主要任務狀態:', data.message);
-      }
     } catch (error) {
       console.error('檢查主要任務失敗:', error);
       // 即使失敗也嘗試獲取任務列表
@@ -159,7 +153,8 @@ export default function QuestTab() {
     try {
       const response = await fetch('/api/footprint/tasks');
       if (response.ok) {
-        const data = await response.json();
+        const result = await response.json();
+        const data = result.success ? result.data : result;
         setTasks(data.tasks || []);
       }
     } catch (error) {

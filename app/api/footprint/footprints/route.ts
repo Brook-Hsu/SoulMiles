@@ -1,6 +1,7 @@
-import { NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { prisma } from '../../../../lib/prisma';
-import { auth } from '../../../../lib/auth';
+import { getUserId } from '../../../../lib/middleware/auth';
+import { successResponse, ApiErrors } from '../../../../lib/utils/api-response';
 
 // 強制動態路由，避免建置時嘗試靜態生成
 export const dynamic = 'force-dynamic';
@@ -8,20 +9,13 @@ export const dynamic = 'force-dynamic';
 /**
  * 獲取使用者的所有 MapRecord 數據（用於地圖顯示）
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    // 獲取當前用戶的 session
-    const session = await auth();
+    const userId = await getUserId();
     
-    // 檢查用戶是否已登入
-    if (!session || !session.user || !(session.user as any).id) {
-      return NextResponse.json(
-        { footprints: [] },
-        { status: 200 }
-      );
+    if (!userId) {
+      return successResponse({ footprints: [] });
     }
-
-    const userId = (session.user as any).id;
 
     // 查詢 MapRecord 而不是 Footprint
     const mapRecords = await prisma.mapRecord.findMany({
@@ -41,27 +35,24 @@ export async function GET() {
       description: record.description,
     }));
 
-    return NextResponse.json({ footprints });
-  } catch (error: any) {
+    return successResponse({ footprints });
+  } catch (error) {
     console.error('獲取 MapRecord 失敗:', error);
     
-    // 處理資料庫連接錯誤（包括帳號被鎖定）
-    const errorMessage = error?.message || '';
-    if (
-      errorMessage.includes('Environment variable') ||
-      errorMessage.includes('DATABASE_URL') ||
-      errorMessage.includes('Access denied') ||
-      errorMessage.includes('Account is locked') ||
-      errorMessage.includes('PrismaClientInitializationError')
-    ) {
-      // 資料庫不可用時，返回空陣列而不是錯誤
-      return NextResponse.json({ footprints: [] }, { status: 200 });
+    if (error instanceof Error) {
+      const errorMessage = error.message;
+      if (
+        errorMessage.includes('Environment variable') ||
+        errorMessage.includes('DATABASE_URL') ||
+        errorMessage.includes('Access denied') ||
+        errorMessage.includes('Account is locked') ||
+        errorMessage.includes('PrismaClientInitializationError')
+      ) {
+        return successResponse({ footprints: [] });
+      }
     }
     
-    return NextResponse.json(
-      { error: '獲取足跡失敗' },
-      { status: 500 }
-    );
+    return ApiErrors.INTERNAL_ERROR('獲取足跡失敗');
   }
 }
 

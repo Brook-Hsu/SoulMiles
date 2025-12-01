@@ -114,7 +114,8 @@ export default function MapRecordModal({ mode, record, records = [], onClose, on
                           }
                         } else {
                           const error = await response.json();
-                          alert(`刪除失敗: ${error.error || '未知錯誤'}`);
+                          const errorMessage = error.success === false ? error.error : (error.error || '未知錯誤');
+                          alert(`刪除失敗: ${errorMessage}`);
                         }
                       } catch (error) {
                         console.error('刪除記錄失敗:', error);
@@ -283,6 +284,7 @@ export default function MapRecordModal({ mode, record, records = [], onClose, on
       });
 
       if (response.ok) {
+        const result = await response.json();
         alert(isEdit ? '足跡記錄已更新' : '足跡記錄已保存');
         onClose();
         // 重置表單
@@ -296,7 +298,8 @@ export default function MapRecordModal({ mode, record, records = [], onClose, on
         }
       } else {
         const error = await response.json();
-        alert(`${isEdit ? '更新' : '保存'}失敗: ${error.error || '未知錯誤'}`);
+        const errorMessage = error.success === false ? error.error : (error.error || '未知錯誤');
+        alert(`${isEdit ? '更新' : '保存'}失敗: ${errorMessage}`);
       }
     } catch (error) {
       console.error(`${currentMode === 'edit' ? '更新' : '保存'}足跡記錄失敗:`, error);

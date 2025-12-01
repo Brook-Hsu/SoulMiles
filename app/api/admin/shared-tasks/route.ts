@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { prisma } from '../../../../lib/prisma';
+import { successResponse, errorResponse, ApiErrors } from '../../../../lib/utils/api-response';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,39 +51,32 @@ export async function POST(request: NextRequest) {
   try {
     // 驗證管理員 API Key
     if (!verifyAdminKey(request)) {
-      return NextResponse.json(
-        { error: '未授權：需要有效的管理員 API Key' },
-        { status: 401 }
-      );
+      return ApiErrors.UNAUTHORIZED();
     }
 
     const body = await request.json().catch(() => ({}));
-    const { name, description, coordinate, Coin } = body;
+    const { name, description, coordinate, Coin } = body as {
+      name?: string;
+      description?: string;
+      coordinate?: string;
+      Coin?: number;
+    };
 
     // 驗證必填欄位
     if (!name || !description || !coordinate || Coin === undefined) {
-      return NextResponse.json(
-        { error: '缺少必填欄位：name, description, coordinate, Coin' },
-        { status: 400 }
-      );
+      return ApiErrors.BAD_REQUEST('缺少必填欄位：name, description, coordinate, Coin');
     }
 
     // 驗證座標格式
     const coordParts = coordinate.split(',');
     if (coordParts.length !== 2) {
-      return NextResponse.json(
-        { error: '座標格式錯誤，應為 "lat,lon"' },
-        { status: 400 }
-      );
+      return ApiErrors.BAD_REQUEST('座標格式錯誤，應為 "lat,lon"');
     }
 
     const lat = parseFloat(coordParts[0]);
     const lon = parseFloat(coordParts[1]);
     if (isNaN(lat) || isNaN(lon)) {
-      return NextResponse.json(
-        { error: '座標格式錯誤，lat 和 lon 必須為數字' },
-        { status: 400 }
-      );
+      return ApiErrors.BAD_REQUEST('座標格式錯誤，lat 和 lon 必須為數字');
     }
 
     // 創建共享任務
@@ -98,17 +92,11 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({
-      success: true,
-      task,
-      message: '共享任務已創建',
-    });
-  } catch (error: any) {
+    return successResponse({ task }, '共享任務已創建');
+  } catch (error) {
     console.error('[Admin API] 創建共享任務失敗:', error);
-    return NextResponse.json(
-      { error: '創建共享任務失敗', details: error.message },
-      { status: 500 }
-    );
+    const errorMessage = error instanceof Error ? error.message : '未知錯誤';
+    return errorResponse('創建共享任務失敗', 500, errorMessage);
   }
 }
 
@@ -119,10 +107,7 @@ export async function GET(request: NextRequest) {
   try {
     // 驗證管理員 API Key
     if (!verifyAdminKey(request)) {
-      return NextResponse.json(
-        { error: '未授權：需要有效的管理員 API Key' },
-        { status: 401 }
-      );
+      return ApiErrors.UNAUTHORIZED();
     }
 
     const tasks = await prisma.task.findMany({
@@ -134,17 +119,11 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({
-      success: true,
-      tasks,
-      count: tasks.length,
-    });
-  } catch (error: any) {
+    return successResponse({ tasks, count: tasks.length });
+  } catch (error) {
     console.error('[Admin API] 獲取共享任務失敗:', error);
-    return NextResponse.json(
-      { error: '獲取共享任務失敗', details: error.message },
-      { status: 500 }
-    );
+    const errorMessage = error instanceof Error ? error.message : '未知錯誤';
+    return errorResponse('獲取共享任務失敗', 500, errorMessage);
   }
 }
 
@@ -155,20 +134,14 @@ export async function DELETE(request: NextRequest) {
   try {
     // 驗證管理員 API Key
     if (!verifyAdminKey(request)) {
-      return NextResponse.json(
-        { error: '未授權：需要有效的管理員 API Key' },
-        { status: 401 }
-      );
+      return ApiErrors.UNAUTHORIZED();
     }
 
     const body = await request.json().catch(() => ({}));
-    const { taskId } = body;
+    const { taskId } = body as { taskId?: string };
 
-    if (!taskId) {
-      return NextResponse.json(
-        { error: '缺少必填欄位：taskId' },
-        { status: 400 }
-      );
+    if (!taskId || typeof taskId !== 'string') {
+      return ApiErrors.BAD_REQUEST('缺少必填欄位：taskId');
     }
 
     // 檢查任務是否存在且為共享任務
@@ -177,17 +150,11 @@ export async function DELETE(request: NextRequest) {
     });
 
     if (!task) {
-      return NextResponse.json(
-        { error: '任務不存在' },
-        { status: 404 }
-      );
+      return ApiErrors.NOT_FOUND('任務');
     }
 
     if (!task.isShared) {
-      return NextResponse.json(
-        { error: '只能刪除共享任務' },
-        { status: 403 }
-      );
+      return ApiErrors.BAD_REQUEST('只能刪除共享任務');
     }
 
     // 刪除任務（會自動刪除相關的 UserTask 記錄，因為有 onDelete: Cascade）
@@ -195,16 +162,11 @@ export async function DELETE(request: NextRequest) {
       where: { id: taskId },
     });
 
-    return NextResponse.json({
-      success: true,
-      message: '共享任務已刪除',
-    });
-  } catch (error: any) {
+    return successResponse({ deleted: true }, '共享任務已刪除');
+  } catch (error) {
     console.error('[Admin API] 刪除共享任務失敗:', error);
-    return NextResponse.json(
-      { error: '刪除共享任務失敗', details: error.message },
-      { status: 500 }
-    );
+    const errorMessage = error instanceof Error ? error.message : '未知錯誤';
+    return errorResponse('刪除共享任務失敗', 500, errorMessage);
   }
 }
 

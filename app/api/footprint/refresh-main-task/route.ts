@@ -1,6 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { prisma } from '../../../../lib/prisma';
-import { auth } from '../../../../lib/auth';
+import { requireAuth } from '../../../../lib/middleware/auth';
+import { successResponse, errorResponse, ApiErrors } from '../../../../lib/utils/api-response';
+import type { FoursquarePlace, FoursquareAttraction } from '../../../../lib/types/foursquare';
 
 // 強制動態路由
 export const dynamic = 'force-dynamic';
@@ -146,8 +148,6 @@ async function fetchNearbyAttractions(lat: number, lon: number, radius: number =
       limit: '10', // 獲取多個景點以便隨機選擇
     });
 
-    console.log('[fetchNearbyAttractions] 請求 URL:', `${searchUrl}?${searchParams.toString()}`);
-
     const response = await fetch(`${searchUrl}?${searchParams.toString()}`, {
       method: 'GET',
       headers: {
@@ -157,19 +157,14 @@ async function fetchNearbyAttractions(lat: number, lon: number, radius: number =
       },
     });
 
-    console.log('[fetchNearbyAttractions] API 回應狀態:', response.status);
-
     if (!response.ok) {
       const errorText = await response.text();
       console.error('[fetchNearbyAttractions] API 錯誤:', response.status, errorText);
       throw new Error(`Foursquare API error: ${response.status}`);
     }
 
-    const data = await response.json();
-    console.log('[fetchNearbyAttractions] API 回應資料:', JSON.stringify(data).substring(0, 200));
-    
-    const results = data.results || data.data || [];
-    console.log('[fetchNearbyAttractions] 原始結果數量:', results.length);
+    const data = await response.json() as { results?: FoursquarePlace[]; data?: FoursquarePlace[] };
+    const results: FoursquarePlace[] = data.results || data.data || [];
 
     if (results.length === 0) {
       console.warn('[fetchNearbyAttractions] API 返回空結果');
@@ -177,18 +172,23 @@ async function fetchNearbyAttractions(lat: number, lon: number, radius: number =
     }
 
     // 計算距離並排序
-    const attractionsWithDistance = results
-      .filter((place: any) => {
+    const attractionsWithDistance: FoursquareAttraction[] = results
+      .filter((place: FoursquarePlace) => {
         const hasGeocode = place.geocodes?.main || place.latitude;
         if (!hasGeocode) {
           console.warn('[fetchNearbyAttractions] 景點缺少地理位置:', place.name);
         }
         return hasGeocode;
       })
-      .map((place: any) => {
+      .map((place: FoursquarePlace): FoursquareAttraction => {
         // 兼容新舊 API 格式
         const placeLat = place.latitude || place.geocodes?.main?.latitude;
         const placeLon = place.longitude || place.geocodes?.main?.longitude;
+        
+        if (!placeLat || !placeLon) {
+          throw new Error(`景點 ${place.name} 缺少有效的地理位置資訊`);
+        }
+        
         const distance = calculateDistance(lat, lon, placeLat, placeLon);
         
         return {
@@ -198,10 +198,8 @@ async function fetchNearbyAttractions(lat: number, lon: number, radius: number =
           lon: placeLon,
         };
       })
-      .filter((place: any) => place.distance <= radius) // 確保在範圍內
-      .sort((a: any, b: any) => a.distance - b.distance); // 按距離排序
-
-    console.log('[fetchNearbyAttractions] 處理後的景點數量:', attractionsWithDistance.length);
+      .filter((place) => place.distance <= radius) // 確保在範圍內
+      .sort((a, b) => a.distance - b.distance); // 按距離排序
 
     return attractionsWithDistance;
   } catch (error) {
@@ -231,16 +229,8 @@ function getSevenDaysAgoDate(): Date {
  * body: { lat?: number, lon?: number, useAI?: boolean }
  */
 export async function POST(request: NextRequest) {
-  console.log('[refresh-main-task] POST 請求收到');
   try {
-    const session = await auth();
-    console.log('[refresh-main-task] Session:', session ? '已登入' : '未登入');
-
-    if (!session || !session.user || !(session.user as any).id) {
-      return NextResponse.json({ error: '未登入' }, { status: 401 });
-    }
-
-    const userId = (session.user as any).id as string;
+    const { userId } = await requireAuth(request);
     const body = await request.json().catch(() => ({}));
     const { lat, lon, useAI = false } = body || {};
 
@@ -268,7 +258,6 @@ export async function POST(request: NextRequest) {
           },
         },
       });
-      console.log('已清理超過7天的任務');
     } catch (error) {
       console.error('清理舊任務失敗:', error);
       // 不中斷流程，繼續執行
@@ -307,8 +296,6 @@ export async function POST(request: NextRequest) {
     // 計算用戶可見的任務總數（主要任務 + 臨時任務）
     const currentTaskCount = userMainTasks.length + userTemporaryTasks.length;
 
-    console.log('[refresh-main-task] 當前任務總數 (主要任務:', userMainTasks.length, '臨時任務:', userTemporaryTasks.length, '總計:', currentTaskCount, ')');
-
     // 檢查用戶是否已有今天的主要任務
     const existingMainTask = await prisma.task.findFirst({
       where: {
@@ -320,63 +307,42 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    console.log('[refresh-main-task] 檢查今天的主要任務:', existingMainTask ? '已存在' : '不存在');
-
     // 如果任務總數已經達到3個或以上，且今天的主要任務已存在，直接返回
     if (currentTaskCount >= 3 && existingMainTask) {
-      console.log('[refresh-main-task] 任務總數已達標且今天的主要任務已存在，跳過生成');
-      return NextResponse.json({
-        success: true,
+      return successResponse({
         task: existingMainTask,
         refreshed: false,
-        message: '任務總數已達標',
         currentTaskCount,
-      });
+      }, '任務總數已達標');
     }
 
     // 如果任務總數少於3個，需要生成任務
     const tasksNeeded = Math.max(0, 3 - currentTaskCount);
-    console.log('[refresh-main-task] 需要生成的任務數量:', tasksNeeded);
 
     // 如果不需要生成任務，直接返回
     if (tasksNeeded === 0) {
-      console.log('[refresh-main-task] 無需生成新任務');
-      return NextResponse.json({
-        success: true,
+      return successResponse({
         task: existingMainTask,
         refreshed: false,
-        message: '任務總數已達標，無需生成新任務',
         currentTaskCount,
-      });
+      }, '任務總數已達標，無需生成新任務');
     }
-
-    console.log('[refresh-main-task] 開始生成新的主要任務');
 
     // 獲取附近景點
     let attractions;
     try {
-      console.log('[refresh-main-task] 開始獲取附近景點，位置:', userLat, userLon);
       attractions = await fetchNearbyAttractions(userLat, userLon, 30000);
-      console.log('[refresh-main-task] 獲取到景點數量:', attractions?.length || 0);
     } catch (error) {
       console.error('[refresh-main-task] 獲取景點失敗:', error);
-      return NextResponse.json(
-        { error: '無法獲取附近景點，請稍後再試' },
-        { status: 500 }
-      );
+      return ApiErrors.INTERNAL_ERROR('無法獲取附近景點，請稍後再試');
     }
 
     if (!attractions || attractions.length === 0) {
-      console.log('[refresh-main-task] 附近沒有找到景點，返回 404');
-      return NextResponse.json(
-        { error: '附近沒有找到景點' },
-        { status: 404 }
-      );
+      return ApiErrors.NOT_FOUND('附近景點');
     }
 
     // 計算需要生成的任務數量（最多生成到3個任務）
     const tasksToGenerate = Math.max(1, Math.min(tasksNeeded, 3));
-    console.log('[refresh-main-task] 將生成任務數量:', tasksToGenerate);
 
     const createdTasks = [];
     const usedAttractionIndices = new Set<number>();
@@ -391,15 +357,12 @@ export async function POST(request: NextRequest) {
       
       usedAttractionIndices.add(selectedIndex);
       const selectedAttraction = attractions[selectedIndex];
-      
-      console.log(`[refresh-main-task] 生成任務 ${i + 1}/${tasksToGenerate}，選擇的景點:`, selectedAttraction.name, '距離:', selectedAttraction.distance);
 
       const placeName = selectedAttraction.name || '未知景點';
       const placeType = selectedAttraction.categories?.[0]?.name || '景點';
       const location = selectedAttraction.location?.formatted_address || 
                        selectedAttraction.location?.address || 
                        '未知位置';
-      console.log('[refresh-main-task] 景點資訊:', { placeName, placeType, location });
 
       // 生成任務內容（根據 useAI 參數決定是否使用 AI）
       // 預設使用模板生成以節省成本
@@ -417,7 +380,6 @@ export async function POST(request: NextRequest) {
 
       // 如果今天的主要任務不存在，且這是第一個要生成的任務，刪除用戶的舊主要任務（非今天的）
       if (i === 0 && !existingMainTask) {
-        console.log('[refresh-main-task] 刪除舊的主要任務（非今天的）');
         await prisma.task.deleteMany({
           where: {
             isMainTask: true,
@@ -430,7 +392,6 @@ export async function POST(request: NextRequest) {
       }
 
       // 建立任務
-      console.log(`[refresh-main-task] 創建任務 ${i + 1} (${isMainTask ? '主要任務' : '補充任務'})`);
       const task = await prisma.task.create({
         data: {
           name: taskContent.name,
@@ -443,10 +404,8 @@ export async function POST(request: NextRequest) {
           refreshDate: today,
         },
       });
-      console.log(`[refresh-main-task] 任務 ${i + 1} 創建成功，ID:`, task.id);
 
       // 確保 UserTask 記錄存在
-      console.log(`[refresh-main-task] 檢查任務 ${i + 1} 的 UserTask 記錄`);
       const existingUserTask = await prisma.userTask.findUnique({
         where: {
           user_id_task_id: {
@@ -457,7 +416,6 @@ export async function POST(request: NextRequest) {
       });
 
       if (!existingUserTask) {
-        console.log(`[refresh-main-task] 創建任務 ${i + 1} 的 UserTask 記錄`);
         await prisma.userTask.create({
           data: {
             user_id: userId,
@@ -468,13 +426,10 @@ export async function POST(request: NextRequest) {
         });
       } else if (existingUserTask.isDone) {
         // 如果舊任務已完成，重置為未完成（讓用戶可以再次完成新任務）
-        console.log(`[refresh-main-task] 重置任務 ${i + 1} 已完成的 UserTask`);
         await prisma.userTask.update({
           where: { id: existingUserTask.id },
           data: { isDone: false },
         });
-      } else {
-        console.log(`[refresh-main-task] 任務 ${i + 1} 的 UserTask 記錄已存在且未完成`);
       }
 
       createdTasks.push({
@@ -486,10 +441,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    console.log('[refresh-main-task] 任務生成完成，共生成:', createdTasks.length, '個任務');
-    
-    return NextResponse.json({
-      success: true,
+    return successResponse({
       tasks: createdTasks,
       mainTask: createdTasks[0]?.task, // 第一個任務作為主要任務返回（向後兼容）
       refreshed: true,
@@ -497,12 +449,16 @@ export async function POST(request: NextRequest) {
       currentTaskCount: currentTaskCount + createdTasks.length,
       tasksGenerated: createdTasks.length,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('[refresh-main-task] 刷新主要任務失敗:', error);
-    return NextResponse.json(
-      { error: '刷新主要任務失敗', details: error.message },
-      { status: 500 }
-    );
+    
+    // 如果是 API 錯誤回應（來自中間件），直接返回
+    if (error && typeof error === 'object' && 'status' in error) {
+      return error as ReturnType<typeof ApiErrors.UNAUTHORIZED>;
+    }
+    
+    const errorMessage = error instanceof Error ? error.message : '未知錯誤';
+    return errorResponse('刷新主要任務失敗', 500, errorMessage);
   }
 }
 
@@ -512,13 +468,7 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
-    const session = await auth();
-
-    if (!session || !session.user || !(session.user as any).id) {
-      return NextResponse.json({ error: '未登入' }, { status: 401 });
-    }
-
-    const userId = (session.user as any).id as string;
+    const { userId } = await requireAuth(request);
     const today = getTodayDate();
 
     // 查找今天的主要任務
@@ -540,8 +490,7 @@ export async function GET(request: NextRequest) {
     });
 
     if (!mainTask) {
-      return NextResponse.json({
-        success: true,
+      return successResponse({
         task: null,
         needsRefresh: true,
       });
@@ -550,20 +499,22 @@ export async function GET(request: NextRequest) {
     const userTask = mainTask.userTasks[0];
     const isDone = userTask?.isDone || false;
 
-    return NextResponse.json({
-      success: true,
+    return successResponse({
       task: {
         ...mainTask,
         isDone,
       },
       needsRefresh: false,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('獲取主要任務失敗:', error);
-    return NextResponse.json(
-      { error: '獲取主要任務失敗' },
-      { status: 500 }
-    );
+    
+    // 如果是 API 錯誤回應（來自中間件），直接返回
+    if (error && typeof error === 'object' && 'status' in error) {
+      return error as ReturnType<typeof ApiErrors.UNAUTHORIZED>;
+    }
+    
+    return ApiErrors.INTERNAL_ERROR('獲取主要任務失敗');
   }
 }
 

@@ -3,6 +3,7 @@ import Facebook from 'next-auth/providers/facebook';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import type { Adapter } from 'next-auth/adapters';
 import { prisma } from './prisma';
+import './types/auth'; // 載入型別擴展
 
 /**
  * NextAuth 配置選項
@@ -47,11 +48,6 @@ const providers: any[] = [];
 
 // 只有在憑證存在時才添加 Google Provider
 if (googleClientId && googleClientSecret) {
-  // 在開發環境中輸出配置信息（僅用於調試，不輸出完整 Secret，僅在服務器端）
-  if (process.env.NODE_ENV === 'development' && typeof window === 'undefined') {
-    console.log('[NextAuth Config] Google Client ID:', googleClientId.substring(0, 20) + '...');
-    console.log('[NextAuth Config] Google Client Secret:', googleClientSecret ? '已設置' : '未設置');
-  }
 
   // 初始化 Google Provider
   // 確保使用正確的配置格式
@@ -71,11 +67,6 @@ if (googleClientId && googleClientSecret) {
 
 // 只有在憑證存在時才添加 Facebook Provider
 if (facebookClientId && facebookClientSecret) {
-  // 在開發環境中輸出配置信息（僅用於調試，不輸出完整 Secret，僅在服務器端）
-  if (process.env.NODE_ENV === 'development' && typeof window === 'undefined') {
-    console.log('[NextAuth Config] Facebook Client ID:', facebookClientId.substring(0, 20) + '...');
-    console.log('[NextAuth Config] Facebook Client Secret:', facebookClientSecret ? '已設置' : '未設置');
-  }
 
   // 初始化 Facebook Provider
   const facebookProvider = Facebook({
@@ -176,7 +167,6 @@ export const authOptions = {
           });
 
           if (process.env.NODE_ENV === 'development') {
-            console.log(`[NextAuth] 已連結 ${account.provider} 帳號到用戶: ${user.email || user.id}`);
           }
         }
       } catch (error) {
@@ -185,7 +175,7 @@ export const authOptions = {
     },
   },
   callbacks: {
-    async signIn({ user, account, profile, email }) {
+    async signIn({ user, account }) {
       // 如果使用 PrismaAdapter，NextAuth 會自動處理帳號連結
       // 但我們可以在這裡添加額外的邏輯來確保相同 email 的帳號被正確連結
       
@@ -210,13 +200,8 @@ export const authOptions = {
             (acc) => acc.provider === account.provider
           );
 
-          if (!existingAccount) {
-            // 如果 email 已存在但該 provider 的帳號尚未連結
-            // PrismaAdapter 會自動處理連結，這裡只記錄日誌
-            if (process.env.NODE_ENV === 'development') {
-              console.log(`[NextAuth] 將 ${account.provider} 帳號連結到現有用戶: ${user.email}`);
-            }
-          }
+          // 如果 email 已存在但該 provider 的帳號尚未連結
+          // PrismaAdapter 會自動處理連結
         }
       } catch (error) {
         console.error('[NextAuth] signIn callback 錯誤:', error);
@@ -283,24 +268,24 @@ export const authOptions = {
 
             if (dbUser) {
               // 擴展 session.user 以包含自定義欄位
-              (session.user as any).id = userId;
-              (session.user as any).coin = dbUser.coin;
-              (session.user as any).IsActive = dbUser.IsActive;
-              (session.user as any).Google_Oath = dbUser.Google_Oath;
-              (session.user as any).UserName = dbUser.UserName;
-              (session.user as any).Field = dbUser.Field;
+              session.user.id = userId;
+              session.user.coin = dbUser.coin;
+              session.user.IsActive = dbUser.IsActive;
+              session.user.Google_Oath = dbUser.Google_Oath;
+              session.user.UserName = dbUser.UserName;
+              session.user.Field = dbUser.Field;
             } else {
               // 即使找不到 dbUser，也要設置 user.id
-              (session.user as any).id = userId;
+              session.user.id = userId;
             }
           } catch (error) {
             console.error('獲取用戶資料失敗:', error);
             // 即使出錯，也要設置 user.id
-            (session.user as any).id = userId;
+            session.user.id = userId;
           }
         } else {
           // 如果 prisma 不可用，至少設置 user.id
-          (session.user as any).id = userId;
+          session.user.id = userId;
         }
       }
       return session;

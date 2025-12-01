@@ -29,7 +29,8 @@ export default function LandingPage() {
       try {
         const response = await fetch('/api/footprint/mist-percentage');
         if (response.ok) {
-          const data = await response.json();
+          const result = await response.json();
+          const data = result.success ? result.data : result;
           setMistPercentage(data.percentage || 0);
         }
       } catch (error) {

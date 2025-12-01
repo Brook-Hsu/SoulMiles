@@ -119,7 +119,8 @@ export default function FootprintMap() {
     try {
       const response = await fetch('/api/footprint/footprints');
       if (response.ok) {
-        const data = await response.json();
+        const result = await response.json();
+        const data = result.success ? result.data : result;
         setFootprints(data.footprints || []);
       }
     } catch (error) {
@@ -131,9 +132,10 @@ export default function FootprintMap() {
     try {
       const response = await fetch('/api/footprint/explored-grids');
       if (response.ok) {
-        const data = await response.json();
+        const result = await response.json();
+        const data = result.success ? result.data : result;
         setExploredGrids(data.grids || []);
-        setExploredGridIds(new Set(data.grids?.map((g: any) => g.gridId) || []));
+        setExploredGridIds(new Set(data.grids?.map((g: { gridId: string }) => g.gridId) || []));
       }
     } catch (error) {
       console.error('獲取已探索方塊失敗:', error);

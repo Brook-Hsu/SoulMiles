@@ -37,7 +37,8 @@ export default function FlipBook({ onClose }: FlipBookProps) {
     try {
       const response = await fetch('/api/footprint/map-records');
       if (response.ok) {
-        const data = await response.json();
+        const result = await response.json();
+        const data = result.success ? result.data : result;
         setRecords(data.records || []);
       }
     } catch (error) {

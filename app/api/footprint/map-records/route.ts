@@ -1,6 +1,7 @@
-import { NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { prisma } from '../../../../lib/prisma';
-import { auth } from '../../../../lib/auth';
+import { requireAuth } from '../../../../lib/middleware/auth';
+import { successResponse, ApiErrors } from '../../../../lib/utils/api-response';
 
 // 強制動態路由，避免建置時嘗試靜態生成
 export const dynamic = 'force-dynamic';
@@ -8,20 +9,9 @@ export const dynamic = 'force-dynamic';
 /**
  * 獲取使用者的所有 MapRecord 數據（包含 MapRecordPicture）
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    // 獲取當前用戶的 session
-    const session = await auth();
-    
-    // 檢查用戶是否已登入
-    if (!session || !session.user || !(session.user as any).id) {
-      return NextResponse.json(
-        { error: '請先登入' },
-        { status: 401 }
-      );
-    }
-
-    const userId = (session.user as any).id;
+    const { userId } = await requireAuth(request);
 
     const records = await prisma.mapRecord.findMany({
       where: {
@@ -48,45 +38,47 @@ export async function GET() {
       })),
     }));
 
-    return NextResponse.json({ records: formattedRecords });
-  } catch (error: any) {
+    return successResponse({ records: formattedRecords });
+  } catch (error) {
     console.error('獲取 MapRecord 失敗:', error);
-    // 如果是資料庫連接錯誤，返回空陣列而不是錯誤
-    if (error?.message?.includes('Environment variable') || error?.message?.includes('DATABASE_URL')) {
-      return NextResponse.json({ records: [] }, { status: 200 });
+    
+    // 如果是 API 錯誤回應（來自中間件），直接返回
+    if (error && typeof error === 'object' && 'status' in error) {
+      return error as ReturnType<typeof ApiErrors.UNAUTHORIZED>;
     }
-    return NextResponse.json(
-      { error: '獲取記錄失敗' },
-      { status: 500 }
-    );
+    
+    if (error instanceof Error) {
+      const errorMessage = error.message;
+      if (
+        errorMessage.includes('Environment variable') ||
+        errorMessage.includes('DATABASE_URL') ||
+        errorMessage.includes('Access denied') ||
+        errorMessage.includes('Account is locked')
+      ) {
+        return successResponse({ records: [] });
+      }
+    }
+    
+    return ApiErrors.INTERNAL_ERROR('獲取記錄失敗');
   }
 }
 
 /**
  * 創建新的 MapRecord（包含 MapRecordPicture）
  */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    // 獲取當前用戶的 session
-    const session = await auth();
-    
-    // 檢查用戶是否已登入
-    if (!session || !session.user || !(session.user as any).id) {
-      return NextResponse.json(
-        { error: '請先登入' },
-        { status: 401 }
-      );
-    }
-
-    const userId = (session.user as any).id;
+    const { userId } = await requireAuth(request);
     const body = await request.json();
-    const { name, description, coordinate, pictures } = body;
+    const { name, description, coordinate, pictures } = body as {
+      name?: string;
+      description?: string;
+      coordinate?: string;
+      pictures?: string[];
+    };
 
-    if (!name) {
-      return NextResponse.json(
-        { error: '地點名稱為必填項' },
-        { status: 400 }
-      );
+    if (!name || typeof name !== 'string') {
+      return ApiErrors.BAD_REQUEST('地點名稱為必填項');
     }
 
     // 創建 MapRecord 和相關的 MapRecordPicture
@@ -107,48 +99,40 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json({ record: mapRecord });
+    return successResponse({ record: mapRecord });
   } catch (error) {
     console.error('創建 MapRecord 失敗:', error);
-    return NextResponse.json(
-      { error: '創建記錄失敗' },
-      { status: 500 }
-    );
+    
+    // 如果是 API 錯誤回應（來自中間件），直接返回
+    if (error && typeof error === 'object' && 'status' in error) {
+      return error as ReturnType<typeof ApiErrors.UNAUTHORIZED>;
+    }
+    
+    return ApiErrors.INTERNAL_ERROR('創建記錄失敗');
   }
 }
 
 /**
  * 更新現有的 MapRecord（包含 MapRecordPicture）
  */
-export async function PUT(request: Request) {
+export async function PUT(request: NextRequest) {
   try {
-    // 獲取當前用戶的 session
-    const session = await auth();
-    
-    // 檢查用戶是否已登入
-    if (!session || !session.user || !(session.user as any).id) {
-      return NextResponse.json(
-        { error: '請先登入' },
-        { status: 401 }
-      );
-    }
-
-    const userId = (session.user as any).id;
+    const { userId } = await requireAuth(request);
     const body = await request.json();
-    const { id, name, description, coordinate, pictures } = body;
+    const { id, name, description, coordinate, pictures } = body as {
+      id?: string;
+      name?: string;
+      description?: string;
+      coordinate?: string;
+      pictures?: string[];
+    };
 
-    if (!id) {
-      return NextResponse.json(
-        { error: '記錄 ID 為必填項' },
-        { status: 400 }
-      );
+    if (!id || typeof id !== 'string') {
+      return ApiErrors.BAD_REQUEST('記錄 ID 為必填項');
     }
 
-    if (!name) {
-      return NextResponse.json(
-        { error: '地點名稱為必填項' },
-        { status: 400 }
-      );
+    if (!name || typeof name !== 'string') {
+      return ApiErrors.BAD_REQUEST('地點名稱為必填項');
     }
 
     // 檢查記錄是否存在且屬於當前用戶
@@ -158,17 +142,11 @@ export async function PUT(request: Request) {
     });
 
     if (!existingRecord) {
-      return NextResponse.json(
-        { error: '記錄不存在' },
-        { status: 404 }
-      );
+      return ApiErrors.NOT_FOUND('記錄');
     }
 
     if (existingRecord.user_id !== userId) {
-      return NextResponse.json(
-        { error: '無權限修改此記錄' },
-        { status: 403 }
-      );
+      return ApiErrors.FORBIDDEN();
     }
 
     // 更新 MapRecord
@@ -210,41 +188,30 @@ export async function PUT(request: Request) {
       },
     });
 
-    return NextResponse.json({ record: finalRecord });
+    return successResponse({ record: finalRecord });
   } catch (error) {
     console.error('更新 MapRecord 失敗:', error);
-    return NextResponse.json(
-      { error: '更新記錄失敗' },
-      { status: 500 }
-    );
+    
+    // 如果是 API 錯誤回應（來自中間件），直接返回
+    if (error && typeof error === 'object' && 'status' in error) {
+      return error as ReturnType<typeof ApiErrors.UNAUTHORIZED>;
+    }
+    
+    return ApiErrors.INTERNAL_ERROR('更新記錄失敗');
   }
 }
 
 /**
  * 刪除 MapRecord（包含相關的 MapRecordPicture）
  */
-export async function DELETE(request: Request) {
+export async function DELETE(request: NextRequest) {
   try {
-    // 獲取當前用戶的 session
-    const session = await auth();
-    
-    // 檢查用戶是否已登入
-    if (!session || !session.user || !(session.user as any).id) {
-      return NextResponse.json(
-        { error: '請先登入' },
-        { status: 401 }
-      );
-    }
-
-    const userId = (session.user as any).id;
-    const { searchParams } = new URL(request.url);
+    const { userId } = await requireAuth(request);
+    const { searchParams } = request.nextUrl;
     const id = searchParams.get('id');
 
     if (!id) {
-      return NextResponse.json(
-        { error: '記錄 ID 為必填項' },
-        { status: 400 }
-      );
+      return ApiErrors.BAD_REQUEST('記錄 ID 為必填項');
     }
 
     // 檢查記錄是否存在且屬於當前用戶
@@ -253,17 +220,11 @@ export async function DELETE(request: Request) {
     });
 
     if (!existingRecord) {
-      return NextResponse.json(
-        { error: '記錄不存在' },
-        { status: 404 }
-      );
+      return ApiErrors.NOT_FOUND('記錄');
     }
 
     if (existingRecord.user_id !== userId) {
-      return NextResponse.json(
-        { error: '無權限刪除此記錄' },
-        { status: 403 }
-      );
+      return ApiErrors.FORBIDDEN();
     }
 
     // 刪除記錄（相關的 MapRecordPicture 會因為 onDelete: Cascade 自動刪除）
@@ -271,13 +232,16 @@ export async function DELETE(request: Request) {
       where: { id },
     });
 
-    return NextResponse.json({ success: true });
+    return successResponse({ deleted: true });
   } catch (error) {
     console.error('刪除 MapRecord 失敗:', error);
-    return NextResponse.json(
-      { error: '刪除記錄失敗' },
-      { status: 500 }
-    );
+    
+    // 如果是 API 錯誤回應（來自中間件），直接返回
+    if (error && typeof error === 'object' && 'status' in error) {
+      return error as ReturnType<typeof ApiErrors.UNAUTHORIZED>;
+    }
+    
+    return ApiErrors.INTERNAL_ERROR('刪除記錄失敗');
   }
 }
 

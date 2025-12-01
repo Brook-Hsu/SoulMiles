@@ -1,6 +1,7 @@
-import { NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { prisma } from '../../../../lib/prisma';
-import { auth } from '../../../../lib/auth';
+import { getUserId } from '../../../../lib/middleware/auth';
+import { successResponse, errorResponse, ApiErrors } from '../../../../lib/utils/api-response';
 
 // 強制動態路由，避免建置時嘗試靜態生成
 export const dynamic = 'force-dynamic';
@@ -11,10 +12,9 @@ export const dynamic = 'force-dynamic';
  * - 主要任務（isMainTask: true）：只有 assignedUserId 為當前用戶的任務
  * - 臨時任務（isTemporary: true）：只有通過 UserTask 關聯的任務
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const session = await auth();
-    const userId = session?.user && (session.user as any).id ? (session.user as any).id : null;
+    const userId = await getUserId();
 
     // 計算7天前的日期
     const sevenDaysAgo = new Date();
@@ -22,7 +22,10 @@ export async function GET() {
     sevenDaysAgo.setHours(0, 0, 0, 0);
 
     // 構建查詢條件
-    const whereConditions: any = {
+    const whereConditions: {
+      Create_time: { gte: Date };
+      OR: Array<Record<string, unknown>>;
+    } = {
       Create_time: {
         gte: sevenDaysAgo, // 只獲取7天內的任務
       },
@@ -90,17 +93,29 @@ export async function GET() {
       ],
     });
 
-    return NextResponse.json({ tasks });
-  } catch (error: any) {
+    return successResponse({ tasks });
+  } catch (error) {
     console.error('獲取 Task 失敗:', error);
+    
     // 如果是資料庫連接錯誤，返回空陣列而不是錯誤
-    if (error?.message?.includes('Environment variable') || error?.message?.includes('DATABASE_URL')) {
-      return NextResponse.json({ tasks: [] }, { status: 200 });
+    if (error instanceof Error) {
+      const errorMessage = error.message;
+      if (
+        errorMessage.includes('Environment variable') ||
+        errorMessage.includes('DATABASE_URL') ||
+        errorMessage.includes('Access denied') ||
+        errorMessage.includes('Account is locked')
+      ) {
+        return successResponse({ tasks: [] });
+      }
     }
-    return NextResponse.json(
-      { error: '獲取任務失敗' },
-      { status: 500 }
-    );
+    
+    // 如果是 API 錯誤回應（來自中間件），直接返回
+    if (error && typeof error === 'object' && 'status' in error) {
+      return error as ReturnType<typeof ApiErrors.UNAUTHORIZED>;
+    }
+    
+    return ApiErrors.INTERNAL_ERROR('獲取任務失敗');
   }
 }
 

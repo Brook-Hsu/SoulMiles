@@ -1,6 +1,7 @@
-import { NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { prisma } from '../../../../lib/prisma';
-import { auth } from '../../../../lib/auth';
+import { requireAuth } from '../../../../lib/middleware/auth';
+import { successResponse, ApiErrors } from '../../../../lib/utils/api-response';
 
 // 強制動態路由，避免建置時嘗試靜態生成
 export const dynamic = 'force-dynamic';
@@ -9,28 +10,14 @@ export const dynamic = 'force-dynamic';
  * 完成任務
  * 更新 UserTask 表的 isDone 狀態，並增加使用者的 coin
  */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    // 獲取當前用戶的 session
-    const session = await auth();
-    
-    // 檢查用戶是否已登入
-    if (!session || !session.user || !(session.user as any).id) {
-      return NextResponse.json(
-        { error: '請先登入' },
-        { status: 401 }
-      );
-    }
-
-    const userId = (session.user as any).id;
+    const { userId } = await requireAuth(request);
     const body = await request.json();
-    const { taskId } = body;
+    const { taskId } = body as { taskId?: string };
 
-    if (!taskId) {
-      return NextResponse.json(
-        { error: '任務 ID 為必填項' },
-        { status: 400 }
-      );
+    if (!taskId || typeof taskId !== 'string') {
+      return ApiErrors.BAD_REQUEST('任務 ID 為必填項');
     }
 
     // 獲取任務資訊
@@ -39,10 +26,7 @@ export async function POST(request: Request) {
     });
 
     if (!task) {
-      return NextResponse.json(
-        { error: '任務不存在' },
-        { status: 404 }
-      );
+      return ApiErrors.NOT_FOUND('任務');
     }
 
     // 檢查是否已有 UserTask 記錄
@@ -58,10 +42,7 @@ export async function POST(request: Request) {
     if (userTask) {
       // 如果已存在且已完成，返回錯誤
       if (userTask.isDone) {
-        return NextResponse.json(
-          { error: '任務已完成' },
-          { status: 400 }
-        );
+        return ApiErrors.BAD_REQUEST('任務已完成');
       }
 
       // 更新為已完成
@@ -94,17 +75,19 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json({
-      success: true,
+    return successResponse({
       coinEarned: task.Coin,
       userTask,
     });
   } catch (error) {
     console.error('完成任務失敗:', error);
-    return NextResponse.json(
-      { error: '完成任務失敗' },
-      { status: 500 }
-    );
+    
+    // 如果是 API 錯誤回應（來自中間件），直接返回
+    if (error && typeof error === 'object' && 'status' in error) {
+      return error as ReturnType<typeof ApiErrors.UNAUTHORIZED>;
+    }
+    
+    return ApiErrors.INTERNAL_ERROR('完成任務失敗');
   }
 }
 

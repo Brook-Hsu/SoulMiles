@@ -1,26 +1,25 @@
-import { NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { prisma } from '../../../../lib/prisma';
-import { auth } from '../../../../lib/auth';
+import { getUserId } from '../../../../lib/middleware/auth';
 import { coordinateToGridId, getAllTaiwanGridIds } from '../../../../lib/utils/gridUtils';
+import { successResponse, ApiErrors } from '../../../../lib/utils/api-response';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const session = await auth();
-
-    if (!session || !session.user || !(session.user as any).id) {
-      return NextResponse.json({ percentage: 0 }, { status: 200 });
+    const userId = await getUserId();
+    
+    if (!userId) {
+      return successResponse({ percentage: 0 });
     }
-
-    const userId = (session.user as any).id;
 
     // 獲取所有台灣方塊的 ID (使用快取)
     const allGridIds = getAllTaiwanGridIds();
     const totalGridCount = allGridIds.length;
 
     if (totalGridCount === 0) {
-      return NextResponse.json({ percentage: 0 });
+      return successResponse({ percentage: 0 });
     }
 
     // 查詢使用者已探索的方塊
@@ -53,20 +52,24 @@ export async function GET() {
     const exploredCount = uniqueExploredGridIds.size;
     const percentage = (exploredCount / totalGridCount) * 100;
 
-    return NextResponse.json({ percentage: parseFloat(percentage.toFixed(2)) });
-  } catch (error: any) {
+    return successResponse({ percentage: parseFloat(percentage.toFixed(2)) });
+  } catch (error) {
     console.error('獲取迷霧百分比失敗:', error);
-    const errorMessage = error?.message || '';
-    if (
-      errorMessage.includes('Environment variable') ||
-      errorMessage.includes('DATABASE_URL') ||
-      errorMessage.includes('Access denied') ||
-      errorMessage.includes('Account is locked') ||
-      errorMessage.includes('PrismaClientInitializationError')
-    ) {
-      return NextResponse.json({ percentage: 0 }, { status: 200 });
+    
+    if (error instanceof Error) {
+      const errorMessage = error.message;
+      if (
+        errorMessage.includes('Environment variable') ||
+        errorMessage.includes('DATABASE_URL') ||
+        errorMessage.includes('Access denied') ||
+        errorMessage.includes('Account is locked') ||
+        errorMessage.includes('PrismaClientInitializationError')
+      ) {
+        return successResponse({ percentage: 0 });
+      }
     }
-    return NextResponse.json({ error: '獲取迷霧百分比失敗' }, { status: 500 });
+    
+    return ApiErrors.INTERNAL_ERROR('獲取迷霧百分比失敗');
   }
 }
 

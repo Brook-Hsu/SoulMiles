@@ -56,7 +56,8 @@ export default function MyMapTabClient({ records: initialRecords }: MyMapTabClie
         setLoading(true);
         const response = await fetch('/api/footprint/map-records');
         if (response.ok) {
-          const data = await response.json();
+          const result = await response.json();
+          const data = result.success ? result.data : result;
           setRecords(data.records || []);
         } else {
           // 如果未登入或其他錯誤，設置為空陣列

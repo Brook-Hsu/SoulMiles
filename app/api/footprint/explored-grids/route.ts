@@ -1,19 +1,18 @@
-import { NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { prisma } from '../../../../lib/prisma';
-import { auth } from '../../../../lib/auth';
+import { getUserId } from '../../../../lib/middleware/auth';
 import { coordinateToGridId } from '../../../../lib/utils/gridUtils';
+import { successResponse, ApiErrors } from '../../../../lib/utils/api-response';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const session = await auth();
-
-    if (!session || !session.user || !(session.user as any).id) {
-      return NextResponse.json({ grids: [] }, { status: 200 });
+    const userId = await getUserId();
+    
+    if (!userId) {
+      return successResponse({ grids: [] });
     }
-
-    const userId = (session.user as any).id;
 
     const footprints = await prisma.footprint.findMany({
       where: {
@@ -55,19 +54,23 @@ export async function GET() {
       exploredAt: data.exploredAt,
     }));
 
-    return NextResponse.json({ grids });
-  } catch (error: any) {
+    return successResponse({ grids });
+  } catch (error) {
     console.error('獲取已探索方塊失敗:', error);
-    const errorMessage = error?.message || '';
-    if (
-      errorMessage.includes('Environment variable') ||
-      errorMessage.includes('DATABASE_URL') ||
-      errorMessage.includes('Access denied') ||
-      errorMessage.includes('Account is locked')
-    ) {
-      return NextResponse.json({ grids: [] }, { status: 200 });
+    
+    if (error instanceof Error) {
+      const errorMessage = error.message;
+      if (
+        errorMessage.includes('Environment variable') ||
+        errorMessage.includes('DATABASE_URL') ||
+        errorMessage.includes('Access denied') ||
+        errorMessage.includes('Account is locked')
+      ) {
+        return successResponse({ grids: [] });
+      }
     }
-    return NextResponse.json({ error: '獲取已探索方塊失敗' }, { status: 500 });
+    
+    return ApiErrors.INTERNAL_ERROR('獲取已探索方塊失敗');
   }
 }
 

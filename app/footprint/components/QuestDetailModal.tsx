@@ -112,13 +112,15 @@ export default function QuestDetailModal({ task, onClose, onTaskComplete }: Ques
       });
 
       if (response.ok) {
-        const data = await response.json();
+        const result = await response.json();
+        const data = result.success ? result.data : result;
         alert(`任務完成！獲得 ${task.Coin} 天堂幣`);
         onTaskComplete();
         onClose();
       } else {
         const error = await response.json();
-        alert(`完成任務失敗: ${error.error || '未知錯誤'}`);
+        const errorMessage = error.success === false ? error.error : (error.error || '未知錯誤');
+        alert(`完成任務失敗: ${errorMessage}`);
       }
     } catch (error) {
       console.error('完成任務失敗:', error);
