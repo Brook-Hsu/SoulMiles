@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
+import TableOfContentsPage from './TableOfContentsPage';
 
 interface MapRecord {
   id: string;
@@ -31,8 +32,44 @@ export default function InteractiveFlipBook({ records, onRecordClick }: Interact
   const bookRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
 
-  // 總頁數（封面 + 內容頁）
-  const totalPages = records.length + 1; // 封面(1) + 內容頁(records.length)
+  const recordsPerPage = 3; // 每頁目錄顯示3個印記
+
+  // 對印記進行排序：越早輸入的越前面（按 Create_time 升序）
+  const sortedRecords = useMemo(() => {
+    return [...records].sort((a, b) => {
+      const timeA = new Date(a.Create_time).getTime();
+      const timeB = new Date(b.Create_time).getTime();
+      return timeA - timeB; // 升序：越早的越前面
+    });
+  }, [records]);
+
+  // 計算目錄頁數
+  const tocPageCount = useMemo(() => {
+    if (sortedRecords.length === 0) return 0;
+    return Math.ceil(sortedRecords.length / recordsPerPage);
+  }, [sortedRecords.length, recordsPerPage]);
+
+  // 總頁數（封面 + 目錄頁 + 內容頁）
+  const totalPages = 1 + tocPageCount + sortedRecords.length; // 封面(1) + 目錄頁 + 內容頁
+
+  // 判斷當前頁面類型
+  const getPageType = (page: number): 'cover' | 'toc' | 'content' => {
+    if (page === 0) return 'cover';
+    if (page <= tocPageCount) return 'toc';
+    return 'content';
+  };
+
+  // 從目錄頁跳轉到對應的內容頁
+  const handleTocRecordClick = (record: MapRecord) => {
+    const recordIndex = sortedRecords.findIndex((r) => r.id === record.id);
+    if (recordIndex !== -1) {
+      // 計算對應的內容頁索引（封面 + 目錄頁數 + 記錄索引）
+      const targetPage = 1 + tocPageCount + recordIndex;
+      if (targetPage < totalPages) {
+        setCurrentPage(targetPage);
+      }
+    }
+  };
 
   // 處理翻頁
   const flipPage = (direction: 'next' | 'prev') => {
@@ -167,7 +204,7 @@ export default function InteractiveFlipBook({ records, onRecordClick }: Interact
   }, [currentPage, totalPages, isFlipping]);
 
   // 封面頁
-  if (currentPage === 0) {
+  if (getPageType(currentPage) === 'cover') {
     return (
       <div className="w-full relative">
         <div
@@ -239,7 +276,7 @@ export default function InteractiveFlipBook({ records, onRecordClick }: Interact
                           className="text-sm text-[#f0d9b5]/80"
                           style={{ textShadow: '1px 1px 2px rgba(0, 0, 0, 0.8)' }}
                         >
-                          共 {records.length} 頁回憶
+                          共 {sortedRecords.length} 頁回憶
                         </p>
                       </div>
                     </div>
@@ -247,7 +284,7 @@ export default function InteractiveFlipBook({ records, onRecordClick }: Interact
                 </div>
 
                 {/* 翻頁提示 */}
-                {records.length > 0 && (
+                {sortedRecords.length > 0 && (
                   <div className="absolute bottom-8 left-0 right-0 flex justify-center">
                     <div className="flex items-center gap-2 text-[#f7e7c7]/60 text-sm">
                       <span>←</span>
@@ -288,8 +325,88 @@ export default function InteractiveFlipBook({ records, onRecordClick }: Interact
     );
   }
 
+  // 目錄頁
+  if (getPageType(currentPage) === 'toc') {
+    const tocPageIndex = currentPage - 1; // 目錄頁索引（從 0 開始）
+    return (
+      <div className="w-full relative">
+        <div
+          ref={bookRef}
+          className="book-container"
+          style={{
+            perspective: '1500px',
+            perspectiveOrigin: 'center center',
+          }}
+        >
+          <div
+            ref={(el) => (pageRefs.current[currentPage] = el)}
+            className="book-page book-content-page"
+          >
+            <div className="page-front">
+              <TableOfContentsPage
+                records={sortedRecords}
+                pageIndex={tocPageIndex}
+                recordsPerPage={recordsPerPage}
+                onRecordClick={handleTocRecordClick}
+              />
+            </div>
+            <div className="page-back">
+              {/* 下一頁的背面內容 */}
+              {currentPage < totalPages - 1 && getPageType(currentPage + 1) === 'toc' && (
+                <TableOfContentsPage
+                  records={sortedRecords}
+                  pageIndex={tocPageIndex + 1}
+                  recordsPerPage={recordsPerPage}
+                  onRecordClick={handleTocRecordClick}
+                />
+              )}
+              {currentPage < totalPages - 1 && getPageType(currentPage + 1) === 'content' && (
+                <div className="absolute inset-0 bg-gradient-to-br from-[#2d1b3d] via-[#1a1a2e] to-[#0f0a1a] rounded-lg border-4 border-[#f0d9b5]/30 p-6 sm:p-8 overflow-y-auto opacity-50">
+                  {sortedRecords[0] && (
+                    <div className="mb-4">
+                      <h2
+                        className="text-2xl sm:text-3xl font-bold text-[#fbbf24] mb-2"
+                        style={{ fontFamily: 'serif' }}
+                      >
+                        {sortedRecords[0].name || '未命名地點'}
+                      </h2>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* 翻頁控制 */}
+        <div className="mt-4 flex justify-between items-center px-4 sm:px-8">
+          <button
+            onClick={() => handlePageClick('prev')}
+            disabled={currentPage === 0 || isFlipping}
+            className="px-4 py-2 rounded-lg bg-[#6b46c1]/80 text-[#f7e7c7] hover:bg-[#5b21b6] transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
+          >
+            ← 上一頁
+          </button>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-[#f7e7c7]/70">
+              {currentPage + 1} / {totalPages}
+            </span>
+          </div>
+          <button
+            onClick={() => handlePageClick('next')}
+            disabled={currentPage >= totalPages - 1 || isFlipping}
+            className="px-4 py-2 rounded-lg bg-[#fbbf24] text-[#1b0e07] hover:bg-[#f59e0b] transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
+          >
+            下一頁 →
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // 內容頁
-  const record = records[currentPage - 1];
+  const contentPageIndex = currentPage - 1 - tocPageCount; // 內容頁索引
+  const record = sortedRecords[contentPageIndex];
   if (!record) {
     return null;
   }
@@ -389,30 +506,40 @@ export default function InteractiveFlipBook({ records, onRecordClick }: Interact
           </div>
           <div className="page-back">
             {/* 下一頁的背面內容（翻頁時顯示） */}
-            {currentPage < totalPages - 1 && records[currentPage] && (
-              <div className="absolute inset-0 bg-gradient-to-br from-[#2d1b3d] via-[#1a1a2e] to-[#0f0a1a] rounded-lg border-4 border-[#f0d9b5]/30 p-6 sm:p-8 overflow-y-auto">
-                <div className="mb-4">
-                  <h2
-                    className="text-2xl sm:text-3xl font-bold text-[#fbbf24] mb-2"
-                    style={{ fontFamily: 'serif' }}
-                  >
-                    {records[currentPage].name || '未命名地點'}
-                  </h2>
-                  <div className="h-1 w-20 bg-gradient-to-r from-[#fbbf24] to-transparent mb-4" />
-                </div>
-                {records[currentPage].pictures && records[currentPage].pictures.length > 0 && (
-                  <div className="rounded-lg overflow-hidden border-2 border-[#f0d9b5]/20 opacity-70">
-                    {records[currentPage].pictures[0]?.picture && (
-                      <img
-                        src={records[currentPage].pictures[0].picture}
-                        alt="下一頁預覽"
-                        className="w-full h-auto max-h-48 object-cover"
-                      />
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
+            {currentPage < totalPages - 1 && (() => {
+              const nextPageType = getPageType(currentPage + 1);
+              if (nextPageType === 'content') {
+                const nextContentIndex = (currentPage + 1) - 1 - tocPageCount; // 下一頁的內容索引
+                const nextRecord = sortedRecords[nextContentIndex];
+                if (nextRecord) {
+                  return (
+                    <div className="absolute inset-0 bg-gradient-to-br from-[#2d1b3d] via-[#1a1a2e] to-[#0f0a1a] rounded-lg border-4 border-[#f0d9b5]/30 p-6 sm:p-8 overflow-y-auto opacity-50">
+                      <div className="mb-4">
+                        <h2
+                          className="text-2xl sm:text-3xl font-bold text-[#fbbf24] mb-2"
+                          style={{ fontFamily: 'serif' }}
+                        >
+                          {nextRecord.name || '未命名地點'}
+                        </h2>
+                        <div className="h-1 w-20 bg-gradient-to-r from-[#fbbf24] to-transparent mb-4" />
+                      </div>
+                      {nextRecord.pictures && nextRecord.pictures.length > 0 && (
+                        <div className="rounded-lg overflow-hidden border-2 border-[#f0d9b5]/20 opacity-70">
+                          {nextRecord.pictures[0]?.picture && (
+                            <img
+                              src={nextRecord.pictures[0].picture}
+                              alt="下一頁預覽"
+                              className="w-full h-auto max-h-48 object-cover"
+                            />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+              }
+              return null;
+            })()}
           </div>
         </div>
       </div>

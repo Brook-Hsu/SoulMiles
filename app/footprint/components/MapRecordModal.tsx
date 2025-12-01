@@ -178,6 +178,10 @@ export default function MapRecordModal({ mode, record, records = [], onClose, on
   }
 
   const handleAddPicture = () => {
+    if (pictures.length >= 1) {
+      alert('每個印記最多只能上傳一張照片');
+      return;
+    }
     if (currentPicture.trim()) {
       setPictures([...pictures, currentPicture]);
       setCurrentPicture('');
@@ -187,6 +191,13 @@ export default function MapRecordModal({ mode, record, records = [], onClose, on
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+
+    // 檢查是否已有一張照片
+    if (pictures.length >= 1) {
+      alert('每個印記最多只能上傳一張照片');
+      event.target.value = '';
+      return;
+    }
 
     // 驗證文件類型
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
@@ -207,7 +218,7 @@ export default function MapRecordModal({ mode, record, records = [], onClose, on
     reader.onload = (e) => {
       const base64String = e.target?.result as string;
       if (base64String) {
-        setPictures([...pictures, base64String]);
+        setPictures([base64String]); // 直接替換，而不是添加
       }
     };
     reader.onerror = () => {
@@ -357,15 +368,16 @@ export default function MapRecordModal({ mode, record, records = [], onClose, on
         {/* 照片輸入 */}
         <div>
           <label className="block text-sm font-semibold text-[#f7e7c7] mb-2">
-            照片 (Base64 或 URL)
+            照片 (Base64 或 URL) <span className="text-xs text-[#f7e7c7]/50">(最多一張)</span>
           </label>
           <div className="flex gap-2">
             <input
               type="text"
               value={currentPicture}
               onChange={(e) => setCurrentPicture(e.target.value)}
-              className="flex-1 rounded-lg bg-[#2b1a10]/70 border border-[#fbbf24]/30 px-3 py-2 text-[#f7e7c7] focus:border-[#fbbf24] focus:outline-none"
-              placeholder="輸入照片 URL 或 Base64"
+              disabled={pictures.length >= 1}
+              className="flex-1 rounded-lg bg-[#2b1a10]/70 border border-[#fbbf24]/30 px-3 py-2 text-[#f7e7c7] focus:border-[#fbbf24] focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+              placeholder={pictures.length >= 1 ? '已上傳一張照片' : '輸入照片 URL 或 Base64'}
             />
             {/* 隱藏的文件選擇器 */}
             <input
@@ -373,22 +385,25 @@ export default function MapRecordModal({ mode, record, records = [], onClose, on
               type="file"
               accept="image/jpeg,image/jpg,image/png"
               onChange={handleFileSelect}
+              disabled={pictures.length >= 1}
               className="hidden"
             />
             <button
               onClick={handleAddButtonClick}
-              className="px-4 py-2 rounded-lg bg-[#6b46c1] text-[#f7e7c7] hover:bg-[#5b21b6] transition-colors"
+              disabled={pictures.length >= 1}
+              className="px-4 py-2 rounded-lg bg-[#6b46c1] text-[#f7e7c7] hover:bg-[#5b21b6] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title={pictures.length >= 1 ? '每個印記最多只能上傳一張照片' : '選擇照片'}
             >
-              添加
+              選擇
             </button>
             {/* 保留手動輸入的添加功能 */}
-            {currentPicture.trim() && (
+            {currentPicture.trim() && pictures.length < 1 && (
               <button
                 onClick={handleAddPicture}
                 className="px-4 py-2 rounded-lg bg-[#8b5cf6] text-[#f7e7c7] hover:bg-[#7c3aed] transition-colors"
                 title="添加 URL 或 Base64"
               >
-                添加文字
+                添加
               </button>
             )}
           </div>
