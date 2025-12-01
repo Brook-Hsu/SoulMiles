@@ -7,6 +7,7 @@ interface MapRecord {
   id: string;
   name: string | null;
   description: string | null;
+  coordinate: string | null;
   Create_time: string;
   pictures: MapRecordPicture[];
 }
@@ -216,7 +217,9 @@ export default function InteractiveFlipBook({ records, onRecordClick }: Interact
           }}
         >
           <div
-            ref={(el) => (pageRefs.current[0] = el)}
+            ref={(el) => {
+              pageRefs.current[0] = el;
+            }}
             className="book-page book-cover"
           >
             <div className="page-front">
@@ -339,7 +342,9 @@ export default function InteractiveFlipBook({ records, onRecordClick }: Interact
           }}
         >
           <div
-            ref={(el) => (pageRefs.current[currentPage] = el)}
+            ref={(el) => {
+              pageRefs.current[currentPage] = el;
+            }}
             className="book-page book-content-page"
           >
             <div className="page-front">
@@ -423,7 +428,9 @@ export default function InteractiveFlipBook({ records, onRecordClick }: Interact
       >
         {/* 當前頁 */}
         <div
-          ref={(el) => (pageRefs.current[currentPage] = el)}
+          ref={(el) => {
+            pageRefs.current[currentPage] = el;
+          }}
           className="book-page book-content-page"
         >
           <div className="page-front">
