@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { motion, useMotionValue, useTransform, PanInfo } from 'framer-motion';
+import OptimizedImage from './OptimizedImage';
 
 interface MapRecord {
   id: string;
@@ -31,6 +32,7 @@ export default function InteractiveFlipBook({ records, onRecordClick }: Interact
   const [isDragging, setIsDragging] = useState(false);
   const [flipDirection, setFlipDirection] = useState<'left' | 'right' | null>(null);
   const [flipProgress, setFlipProgress] = useState(0);
+  const [preloadedPages, setPreloadedPages] = useState<Set<number>>(new Set());
   const bookRef = useRef<HTMLDivElement>(null);
   const x = useMotionValue(0);
 
@@ -108,6 +110,51 @@ export default function InteractiveFlipBook({ records, onRecordClick }: Interact
   // 將拖曳距離轉換為翻頁角度
   const rotateY = useTransform(x, [-200, 200], [180, -180]);
   const scaleX = useTransform(x, [-200, 0, 200], [1, 0.95, 1]);
+
+  // 圖片預載入機制：預載入當前頁、上一頁和下一頁的圖片
+  useEffect(() => {
+    const preloadImages = (pageIndex: number) => {
+      if (pageIndex < 0 || pageIndex >= records.length) return;
+      if (preloadedPages.has(pageIndex)) return; // 已經預載入過
+
+      const record = records[pageIndex];
+      if (!record?.pictures || record.pictures.length === 0) return;
+
+      // 開始預載入所有圖片
+      record.pictures.forEach((pic) => {
+        if (pic.picture) {
+          const img = new Image();
+          img.src = pic.picture;
+        }
+      });
+
+      // 標記為已預載入（只更新一次）
+      setPreloadedPages((prev) => {
+        if (prev.has(pageIndex)) return prev;
+        return new Set([...prev, pageIndex]);
+      });
+    };
+
+    // 預載入當前頁（優先）
+    if (currentPage > 0) {
+      preloadImages(currentPage - 1);
+    }
+
+    // 預載入上一頁
+    if (currentPage > 1) {
+      preloadImages(currentPage - 2);
+    }
+
+    // 預載入下一頁
+    if (currentPage < records.length) {
+      preloadImages(currentPage);
+    }
+
+    // 預載入下下頁（提前準備）
+    if (currentPage < records.length - 1) {
+      preloadImages(currentPage + 1);
+    }
+  }, [currentPage, records.length]); // 移除 preloadedPages 依賴，避免無限循環
 
   // 封面頁
   if (currentPage === 0) {
@@ -327,16 +374,15 @@ export default function InteractiveFlipBook({ records, onRecordClick }: Interact
 
             {record.pictures && record.pictures.length > 0 && (
               <div className="space-y-3 mb-6">
-                {record.pictures.map((pic) => (
+                {record.pictures.map((pic, index) => (
                   <div key={pic.id} className="rounded-lg overflow-hidden border-2 border-[#f0d9b5]/20">
                     {pic.picture && (
-                      <img
+                      <OptimizedImage
                         src={pic.picture}
-                        alt="回憶照片"
-                        className="w-full h-auto max-h-64 sm:max-h-80 object-cover"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
-                        }}
+                        alt={`${record.name || '回憶'} - 照片 ${index + 1}`}
+                        className="w-full"
+                        maxHeight="max-h-64 sm:max-h-80"
+                        priority={index === 0} // 第一張圖片優先載入
                       />
                     )}
                   </div>
@@ -389,10 +435,12 @@ export default function InteractiveFlipBook({ records, onRecordClick }: Interact
                 {records[currentPage].pictures && records[currentPage].pictures.length > 0 && (
                   <div className="rounded-lg overflow-hidden border-2 border-[#f0d9b5]/20 opacity-50">
                     {records[currentPage].pictures[0]?.picture && (
-                      <img
+                      <OptimizedImage
                         src={records[currentPage].pictures[0].picture}
                         alt="下一頁預覽"
-                        className="w-full h-auto max-h-48 object-cover"
+                        className="w-full opacity-50"
+                        maxHeight="max-h-48"
+                        priority={false} // 預覽圖不需要優先載入
                       />
                     )}
                   </div>
