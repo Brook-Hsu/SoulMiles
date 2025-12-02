@@ -18,6 +18,7 @@ interface FogLayerProps {
 export default function FogLayer({ exploredGridIds }: FogLayerProps) {
   const map = useMap();
   const [mapBounds, setMapBounds] = useState<{ north: number; south: number; east: number; west: number } | null>(null);
+  const [mapZoom, setMapZoom] = useState<number | null>(null);
   const [fogLayerReady, setFogLayerReady] = useState(false);
 
   useEffect(() => {
@@ -25,12 +26,14 @@ export default function FogLayer({ exploredGridIds }: FogLayerProps) {
 
     const updateBounds = () => {
       const bounds = map.getBounds();
+      const zoom = map.getZoom();
       setMapBounds({
         north: bounds.getNorth(),
         south: bounds.getSouth(),
         east: bounds.getEast(),
         west: bounds.getWest(),
       });
+      setMapZoom(zoom);
       setFogLayerReady(true);
     };
 
@@ -46,8 +49,9 @@ export default function FogLayer({ exploredGridIds }: FogLayerProps) {
 
   const visibleGridIds = useMemo(() => {
     if (!mapBounds) return [];
-    return getVisibleGridIds(mapBounds);
-  }, [mapBounds]);
+    // 傳入縮放級別以優化網格密度
+    return getVisibleGridIds(mapBounds, mapZoom || undefined);
+  }, [mapBounds, mapZoom]);
 
   const unexploredGridIds = useMemo(() => {
     if (visibleGridIds.length === 0) return [];

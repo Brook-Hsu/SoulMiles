@@ -89,7 +89,7 @@ export function gridIdsToGeoJSON(gridIds: string[]): GeoJSON.FeatureCollection {
               [bounds.lon, bounds.lat],
               [bounds.lonMax, bounds.lat],
               [bounds.lonMax, bounds.latMax],
-              [bounds.lat, bounds.latMax],
+              [bounds.lon, bounds.latMax],
               [bounds.lon, bounds.lat],
             ],
           ],
@@ -138,9 +138,13 @@ export function getAllTaiwanGridIds(): string[] {
 /**
  * 獲取可見區域內的網格 ID
  * @param bounds 地圖邊界 { north, south, east, west }
+ * @param zoomLevel 可選的地圖縮放級別，用於優化網格密度
  * @returns 可見區域內的網格 ID 陣列
  */
-export function getVisibleGridIds(bounds: { north: number; south: number; east: number; west: number }): string[] {
+export function getVisibleGridIds(
+  bounds: { north: number; south: number; east: number; west: number },
+  zoomLevel?: number
+): string[] {
   const gridIds: string[] = [];
   
   // 確保邊界在台灣範圍內
@@ -155,8 +159,22 @@ export function getVisibleGridIds(bounds: { north: number; south: number; east: 
   const startLonIndex = Math.floor((minLon - TAIWAN_BOUNDS.minLon) / GRID_SIZE_LON);
   const endLonIndex = Math.ceil((maxLon - TAIWAN_BOUNDS.minLon) / GRID_SIZE_LON);
 
-  for (let i = startLatIndex; i <= endLatIndex; i++) {
-    for (let j = startLonIndex; j <= endLonIndex; j++) {
+  // 根據縮放級別決定網格採樣間隔
+  // zoom < 10: 每 3 個網格取一個（大幅減少網格數量）
+  // zoom < 12: 每 2 個網格取一個（適度減少）
+  // zoom >= 12: 顯示所有網格（詳細視圖）
+  let step = 1;
+  if (zoomLevel !== undefined) {
+    if (zoomLevel < 10) {
+      step = 3; // 縮放級別太低時，大幅減少網格數量
+    } else if (zoomLevel < 12) {
+      step = 2; // 中等縮放時，適度減少網格數量
+    }
+    // zoom >= 12 時，step = 1，顯示所有網格
+  }
+
+  for (let i = startLatIndex; i <= endLatIndex; i += step) {
+    for (let j = startLonIndex; j <= endLonIndex; j += step) {
       const lat = TAIWAN_BOUNDS.minLat + i * GRID_SIZE_LAT;
       const lon = TAIWAN_BOUNDS.minLon + j * GRID_SIZE_LON;
       const gridId = coordinateToGridId(lat, lon);
