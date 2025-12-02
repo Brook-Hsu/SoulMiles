@@ -94,58 +94,6 @@ export default function FogLayer({ exploredGridIds }: FogLayerProps) {
     return stars;
   }, [unexploredGridIds, mapBounds]);
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    let filterDef = document.getElementById('fog-particle-filter-defs');
-    if (!filterDef) {
-      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      svg.setAttribute('id', 'fog-particle-filter-defs');
-      svg.setAttribute('class', 'fog-particle-filter-defs');
-      svg.setAttribute('style', 'position: absolute; width: 0; height: 0; pointer-events: none;');
-      
-      const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-      const filter = document.createElementNS('http://www.w3.org/2000/svg', 'filter');
-      filter.setAttribute('id', 'fog-particle-filter');
-      filter.setAttribute('x', '-50%');
-      filter.setAttribute('y', '-50%');
-      filter.setAttribute('width', '200%');
-      filter.setAttribute('height', '200%');
-      filter.setAttribute('color-interpolation-filters', 'sRGB');
-      
-      const turbulence = document.createElementNS('http://www.w3.org/2000/svg', 'feTurbulence');
-      turbulence.setAttribute('type', 'fractalNoise');
-      turbulence.setAttribute('baseFrequency', '0.6');
-      turbulence.setAttribute('numOctaves', '2');
-      turbulence.setAttribute('result', 'noise');
-      turbulence.setAttribute('seed', '1');
-      
-      const colorMatrix = document.createElementNS('http://www.w3.org/2000/svg', 'feColorMatrix');
-      colorMatrix.setAttribute('in', 'noise');
-      colorMatrix.setAttribute('type', 'saturate');
-      colorMatrix.setAttribute('values', '0');
-      colorMatrix.setAttribute('result', 'grayscale-noise');
-      
-      const composite = document.createElementNS('http://www.w3.org/2000/svg', 'feComposite');
-      composite.setAttribute('in', 'SourceGraphic');
-      composite.setAttribute('in2', 'grayscale-noise');
-      composite.setAttribute('operator', 'multiply');
-      composite.setAttribute('result', 'particle-effect');
-      
-      const blur = document.createElementNS('http://www.w3.org/2000/svg', 'feGaussianBlur');
-      blur.setAttribute('in', 'particle-effect');
-      blur.setAttribute('stdDeviation', '0.3');
-      blur.setAttribute('result', 'final');
-      
-      filter.appendChild(turbulence);
-      filter.appendChild(colorMatrix);
-      filter.appendChild(composite);
-      filter.appendChild(blur);
-      defs.appendChild(filter);
-      svg.appendChild(defs);
-      document.body.appendChild(svg);
-    }
-  }, []);
 
   // 生成一個唯一的 key，包含地圖狀態和探索狀態，確保縮放時會重新渲染
   // 必須在條件返回之前調用 useMemo（React Hooks 規則）
@@ -165,23 +113,12 @@ export default function FogLayer({ exploredGridIds }: FogLayerProps) {
         data={fogGeoJSON}
         style={{
           fillColor: '#fbbf24',
-          fillOpacity: 0.65,
-          color: 'rgba(251, 191, 36, 0.4)',
+          fillOpacity: 0.35, // 降低填充透明度，確保能看到底下的地圖
+          color: 'rgba(251, 191, 36, 0.3)', // 降低邊框透明度
           weight: 0.2,
-          opacity: 0.4,
+          opacity: 0.3, // 降低整體透明度
         }}
         interactive={false}
-        onEachFeature={(feature: any, layer: any) => {
-          if (typeof window !== 'undefined') {
-            setTimeout(() => {
-              const pathElement = (layer as any)._path as SVGPathElement;
-              if (pathElement) {
-                pathElement.style.filter = 'url(#fog-particle-filter)';
-                pathElement.style.mixBlendMode = 'multiply';
-              }
-            }, 0);
-          }
-        }}
       />
       {starPositions.map((star) => (
         <StarMarker key={star.id} position={star.position} id={star.id} />

@@ -171,16 +171,24 @@ export function getVisibleGridIds(
   }
 
   // 根據縮放級別決定網格採樣間隔（效能優化，避免小範圍縮放時疊圖嚴重）
+  // 縮放級別越低（視野越大），step 越大，減少網格密度
+  // 1km 縮放對應約 zoom 10-11，500m 對應約 zoom 11-12，50m 對應約 zoom 14-15
   let step = 1;
   if (zoomLevel !== undefined) {
-    if (zoomLevel < 8) {
-      step = 6; // 縮放級別很低時，每 6 個網格取一個（大幅減少疊圖）
+    if (zoomLevel < 7) {
+      step = 12; // 縮放級別極低時（視野很大），每 12 個網格取一個（大幅減少疊圖）
+    } else if (zoomLevel < 8) {
+      step = 10; // 縮放級別很低時，每 10 個網格取一個
     } else if (zoomLevel < 9) {
-      step = 4; // 縮放級別較低時，每 4 個網格取一個
+      step = 8; // 縮放級別較低時，每 8 個網格取一個
+    } else if (zoomLevel < 10) {
+      step = 6; // 縮放級別低時，每 6 個網格取一個
     } else if (zoomLevel < 11) {
-      step = 2; // 中等縮放時，每 2 個網格取一個
+      step = 4; // 接近 1km 縮放時，每 4 個網格取一個（減少疊圖）
+    } else if (zoomLevel < 12) {
+      step = 2; // 500m 縮放時，每 2 個網格取一個
     }
-    // zoom >= 11 時，step = 1，顯示所有網格（詳細視圖）
+    // zoom >= 12 時（1km 縮放以上），step = 1，顯示所有網格（詳細視圖，表現很好）
   }
 
   // 計算網格索引範圍（基於台灣邊界的起始點）
