@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Header from '../../components/Header';
@@ -19,6 +19,47 @@ export default function DashboardPage() {
   const [recommendations, setRecommendations] = useState(null);
   const [crowdData, setCrowdData] = useState(null);
   const [loading, setLoading] = useState(true);
+  
+  // 載入狀態和重試次數追蹤
+  const [transportLoading, setTransportLoading] = useState(true);
+  const [transportError, setTransportError] = useState(false);
+  const [transportRetryCount, setTransportRetryCount] = useState(0);
+  
+  const [lodgingLoading, setLodgingLoading] = useState(true);
+  const [lodgingError, setLodgingError] = useState(false);
+  const [lodgingRetryCount, setLodgingRetryCount] = useState(0);
+  
+  const [restaurantLoading, setRestaurantLoading] = useState(true);
+  const [restaurantError, setRestaurantError] = useState(false);
+  const [restaurantRetryCount, setRestaurantRetryCount] = useState(0);
+  
+  // 手動重新載入的冷卻時間追蹤
+  const [transportCooldown, setTransportCooldown] = useState(0);
+  const [lodgingCooldown, setLodgingCooldown] = useState(0);
+  const [restaurantCooldown, setRestaurantCooldown] = useState(0);
+  
+  const MAX_RETRY_COUNT = 3;
+  const MANUAL_RELOAD_COOLDOWN = 10; // 手動重新載入冷卻時間（秒）
+  
+  // 用於追蹤冷卻計時器的 ref
+  const transportCooldownTimerRef = useRef(null);
+  const lodgingCooldownTimerRef = useRef(null);
+  const restaurantCooldownTimerRef = useRef(null);
+  
+  // 清理冷卻計時器
+  useEffect(() => {
+    return () => {
+      if (transportCooldownTimerRef.current) {
+        clearInterval(transportCooldownTimerRef.current);
+      }
+      if (lodgingCooldownTimerRef.current) {
+        clearInterval(lodgingCooldownTimerRef.current);
+      }
+      if (restaurantCooldownTimerRef.current) {
+        clearInterval(restaurantCooldownTimerRef.current);
+      }
+    };
+  }, []);
   const [bountyAmount, setBountyAmount] = useState(null); // 懸賞金額（從 API 獲取）
   const [bountyDisplayAmount, setBountyDisplayAmount] = useState(1000); // 顯示的金額（動畫用）
   const [bountyLoading, setBountyLoading] = useState(true); // 懸賞金額載入狀態
@@ -67,36 +108,247 @@ export default function DashboardPage() {
     }
   }, [userLocation]);
 
+  // 獲取交通資訊（帶重試機制）
+  const fetchTransportData = async (retryCount = 0) => {
+    if (!userLocation) return;
+    
+    setTransportLoading(true);
+    setTransportError(false);
+    
+    try {
+      // 檢查現有資料，只查詢沒有資料的項目
+      const needsTrain = !transportData || !transportData.train;
+      const needsBus = !transportData || !transportData.bus;
+      const needsBike = !transportData || !transportData.youbike;
+      
+      // 如果所有項目都有資料，直接返回
+      if (!needsTrain && !needsBus && !needsBike) {
+        setTransportLoading(false);
+        setTransportError(false);
+        setTransportRetryCount(0);
+        return;
+      }
+      
+      // 只查詢需要的項目
+      const fetchPromises = [];
+      
+      if (needsTrain) {
+        fetchPromises.push(
+          fetch(`/api/places?lat=${userLocation.lat}&lon=${userLocation.lon}&type=train_station&radius=2000`)
+            .then(async (res) => {
+              // 處理 429 速率限制錯誤
+              if (res.status === 429) {
+                const errorData = await res.json().catch(() => ({}));
+                const error = new Error(errorData.message || '請求過於頻繁，請稍後再試');
+                error.isRateLimit = true;
+                throw error;
+              }
+              if (!res.ok) throw new Error('交通資訊載入失敗');
+              return res.json().then(data => ({ type: 'train', data }));
+            })
+            .catch((err) => {
+              console.error('獲取火車站資訊失敗:', err);
+              throw err;
+            })
+        );
+      } else {
+        // 保留現有資料
+        fetchPromises.push(Promise.resolve({ type: 'train', data: { places: transportData.train ? [transportData.train] : [] } }));
+      }
+      
+      if (needsBus) {
+        fetchPromises.push(
+          fetch(`/api/places?lat=${userLocation.lat}&lon=${userLocation.lon}&type=bus_station&radius=2000`)
+            .then(async (res) => {
+              // 處理 429 速率限制錯誤
+              if (res.status === 429) {
+                const errorData = await res.json().catch(() => ({}));
+                const error = new Error(errorData.message || '請求過於頻繁，請稍後再試');
+                error.isRateLimit = true;
+                throw error;
+              }
+              if (!res.ok) throw new Error('交通資訊載入失敗');
+              return res.json().then(data => ({ type: 'bus', data }));
+            })
+            .catch((err) => {
+              console.error('獲取公車站資訊失敗:', err);
+              throw err;
+            })
+        );
+      } else {
+        // 保留現有資料
+        fetchPromises.push(Promise.resolve({ type: 'bus', data: { places: transportData.bus ? [transportData.bus] : [] } }));
+      }
+      
+      if (needsBike) {
+        fetchPromises.push(
+          fetch(`/api/places?lat=${userLocation.lat}&lon=${userLocation.lon}&type=bicycle_rental&radius=2000`)
+            .then(async (res) => {
+              // 處理 429 速率限制錯誤
+              if (res.status === 429) {
+                const errorData = await res.json().catch(() => ({}));
+                const error = new Error(errorData.message || '請求過於頻繁，請稍後再試');
+                error.isRateLimit = true;
+                throw error;
+              }
+              if (!res.ok) throw new Error('交通資訊載入失敗');
+              return res.json().then(data => ({ type: 'bike', data }));
+            })
+            .catch((err) => {
+              console.error('獲取YouBike資訊失敗:', err);
+              throw err;
+            })
+        );
+      } else {
+        // 保留現有資料
+        fetchPromises.push(Promise.resolve({ type: 'bike', data: { places: transportData.youbike ? [transportData.youbike] : [] } }));
+      }
+      
+      const results = await Promise.all(fetchPromises);
+      
+      // 組合結果，保留現有資料
+      const newTransportData = {
+        train: transportData?.train || null,
+        bus: transportData?.bus || null,
+        youbike: transportData?.youbike || null,
+      };
+      
+      results.forEach((result) => {
+        if (result.type === 'train') {
+          newTransportData.train = result.data.places?.[0] || null;
+        } else if (result.type === 'bus') {
+          newTransportData.bus = result.data.places?.[0] || null;
+        } else if (result.type === 'bike') {
+          newTransportData.youbike = result.data.places?.[0] || null;
+        }
+      });
+      
+      setTransportData(newTransportData);
+      setTransportLoading(false);
+      setTransportError(false);
+      setTransportRetryCount(0);
+    } catch (err) {
+      console.error('獲取交通資訊失敗:', err);
+      // 如果是速率限制錯誤，使用更長的延遲時間
+      const isRateLimit = err.isRateLimit || err.message?.includes('請求過於頻繁') || err.message?.includes('Too Many Requests');
+      const delay = isRateLimit ? 5000 * (retryCount + 1) : 1000 * (retryCount + 1); // 速率限制時使用 5s, 10s, 15s
+      
+      if (retryCount < MAX_RETRY_COUNT) {
+        // 重試：延遲後再次嘗試
+        setTimeout(() => {
+          setTransportRetryCount(retryCount + 1);
+          fetchTransportData(retryCount + 1);
+        }, delay);
+      } else {
+        // 超過重試次數，顯示錯誤
+        setTransportError(true);
+        setTransportLoading(false);
+        setTransportRetryCount(MAX_RETRY_COUNT);
+      }
+    }
+  };
+
+  // 獲取住宿資訊（帶重試機制）
+  const fetchLodgingData = async (retryCount = 0) => {
+    if (!userLocation) return;
+    
+    setLodgingLoading(true);
+    setLodgingError(false);
+    
+    try {
+      const response = await fetch(`/api/places?lat=${userLocation.lat}&lon=${userLocation.lon}&type=lodging&radius=5000`);
+      
+      // 處理 429 速率限制錯誤
+      if (response.status === 429) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || '請求過於頻繁，請稍後再試');
+      }
+      
+      if (!response.ok) throw new Error('住宿資訊載入失敗');
+      const lodgingData = await response.json();
+      
+      // API 成功返回，即使數據為空也視為成功
+      setRecommendations((prev) => ({
+        ...prev,
+        lodging: lodgingData.places?.slice(0, 3) || [],
+      }));
+      setLodgingLoading(false);
+      setLodgingError(false);
+      setLodgingRetryCount(0);
+    } catch (err) {
+      console.error('獲取住宿資訊失敗:', err);
+      // 如果是速率限制錯誤，使用更長的延遲時間
+      const isRateLimit = err.message.includes('請求過於頻繁') || err.message.includes('Too Many Requests');
+      const delay = isRateLimit ? 5000 * (retryCount + 1) : 1000 * (retryCount + 1); // 速率限制時使用 5s, 10s, 15s
+      
+      if (retryCount < MAX_RETRY_COUNT) {
+        setTimeout(() => {
+          setLodgingRetryCount(retryCount + 1);
+          fetchLodgingData(retryCount + 1);
+        }, delay);
+      } else {
+        setLodgingError(true);
+        setLodgingLoading(false);
+        setLodgingRetryCount(MAX_RETRY_COUNT);
+      }
+    }
+  };
+
+  // 獲取餐廳資訊（帶重試機制）
+  const fetchRestaurantData = async (retryCount = 0) => {
+    if (!userLocation) return;
+    
+    setRestaurantLoading(true);
+    setRestaurantError(false);
+    
+    try {
+      const response = await fetch(`/api/places?lat=${userLocation.lat}&lon=${userLocation.lon}&type=restaurant&radius=5000`);
+      
+      // 處理 429 速率限制錯誤
+      if (response.status === 429) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || '請求過於頻繁，請稍後再試');
+      }
+      
+      if (!response.ok) throw new Error('餐廳資訊載入失敗');
+      const restaurantData = await response.json();
+      
+      // API 成功返回，即使數據為空也視為成功
+      setRecommendations((prev) => ({
+        ...prev,
+        restaurant: restaurantData.places?.slice(0, 3) || [],
+      }));
+      setRestaurantLoading(false);
+      setRestaurantError(false);
+      setRestaurantRetryCount(0);
+    } catch (err) {
+      console.error('獲取餐廳資訊失敗:', err);
+      // 如果是速率限制錯誤，使用更長的延遲時間
+      const isRateLimit = err.message.includes('請求過於頻繁') || err.message.includes('Too Many Requests');
+      const delay = isRateLimit ? 5000 * (retryCount + 1) : 1000 * (retryCount + 1); // 速率限制時使用 5s, 10s, 15s
+      
+      if (retryCount < MAX_RETRY_COUNT) {
+        setTimeout(() => {
+          setRestaurantRetryCount(retryCount + 1);
+          fetchRestaurantData(retryCount + 1);
+        }, delay);
+      } else {
+        setRestaurantError(true);
+        setRestaurantLoading(false);
+        setRestaurantRetryCount(MAX_RETRY_COUNT);
+      }
+    }
+  };
+
   // 獲取交通和推薦數據
   useEffect(() => {
     if (userLocation) {
-      // 獲取交通資訊（火車站、公車站、YouBike 租借點）
-      Promise.all([
-        fetch(`/api/places?lat=${userLocation.lat}&lon=${userLocation.lon}&type=train_station&radius=2000`).then((res) => res.json()),
-        fetch(`/api/places?lat=${userLocation.lat}&lon=${userLocation.lon}&type=bus_station&radius=2000`).then((res) => res.json()),
-        fetch(`/api/places?lat=${userLocation.lat}&lon=${userLocation.lon}&type=bicycle_rental&radius=2000`).then((res) => res.json()),
-      ])
-        .then(([trainData, busData, bikeData]) => {
-          setTransportData({
-            train: trainData.places?.[0] || null, // 只取最近的一個
-            bus: busData.places?.[0] || null, // 只取最近的一個
-            youbike: bikeData.places?.[0] || null, // 只取最近的一個
-          });
-        })
-        .catch((err) => console.error('獲取交通資訊失敗:', err));
-
-      // 獲取推薦（住宿和餐廳）
-      Promise.all([
-        fetch(`/api/places?lat=${userLocation.lat}&lon=${userLocation.lon}&type=lodging&radius=5000`).then((res) => res.json()),
-        fetch(`/api/places?lat=${userLocation.lat}&lon=${userLocation.lon}&type=restaurant&radius=5000`).then((res) => res.json()),
-      ])
-        .then(([lodgingData, restaurantData]) => {
-          setRecommendations({
-            lodging: lodgingData.places?.slice(0, 3) || [],
-            restaurant: restaurantData.places?.slice(0, 3) || [],
-          });
-        })
-        .catch((err) => console.error('獲取推薦失敗:', err));
+      // 初始化時重置狀態
+      setTransportData(null);
+      setRecommendations({ lodging: [], restaurant: [] });
+      fetchTransportData();
+      fetchLodgingData();
+      fetchRestaurantData();
 
       // 獲取景區人潮資料
       fetch(`/api/places?lat=${userLocation.lat}&lon=${userLocation.lon}&type=tourist_attraction&radius=5000`)
@@ -135,13 +387,41 @@ export default function DashboardPage() {
       const minAmount = 1000;
       const maxAmount = 1000000;
       let currentAmount = minAmount;
+      let direction = 1; // 1 表示增加，-1 表示減少
       let transitionInterval = null;
       
       const animationInterval = setInterval(() => {
-        // 每次增加隨機值，讓數字快速變化
-        const increment = Math.random() * (maxAmount - minAmount) * 0.1;
-        currentAmount = Math.min(maxAmount, currentAmount + increment);
-        setBountyDisplayAmount(Math.floor(currentAmount));
+        // 使用波動效果，避免長時間停在最大值
+        // 當接近最大值時，開始減少；當接近最小值時，開始增加
+        const range = maxAmount - minAmount;
+        const progress = (currentAmount - minAmount) / range;
+        
+        // 根據當前位置決定變化方向和速度
+        let increment;
+        if (progress > 0.9) {
+          // 接近最大值時，強制減少
+          direction = -1;
+          increment = Math.random() * range * 0.15;
+        } else if (progress < 0.1) {
+          // 接近最小值時，強制增加
+          direction = 1;
+          increment = Math.random() * range * 0.15;
+        } else {
+          // 中間區域，隨機變化方向和速度
+          direction = Math.random() > 0.5 ? 1 : -1;
+          increment = Math.random() * range * 0.1;
+        }
+        
+        currentAmount = currentAmount + (direction * increment);
+        
+        // 確保在範圍內，但允許短暫超出以保持動態感
+        if (currentAmount > maxAmount * 1.1) {
+          currentAmount = maxAmount * 0.9; // 超過太多時重置到較低值
+        } else if (currentAmount < minAmount * 0.9) {
+          currentAmount = minAmount * 1.1; // 低於太多時重置到較高值
+        }
+        
+        setBountyDisplayAmount(Math.floor(Math.max(minAmount, Math.min(maxAmount, currentAmount))));
       }, 50); // 每 50ms 更新一次，讓數字快速變化
       
       fetch(`/api/dashboard/bounty?lat=${userLocation.lat}&lon=${userLocation.lon}`)
@@ -414,7 +694,6 @@ export default function DashboardPage() {
                   </p>
                   {bountyTotalScore !== null && !bountyLoading && (
                     <div className="mt-2 text-xs text-soul-glow/50">
-                      <p>合適度: {Math.round(bountyTotalScore)}%</p>
                     </div>
                   )}
                 </div>
@@ -557,7 +836,6 @@ export default function DashboardPage() {
               <span className="text-xl">🌊</span>
               <h3 className="text-sm font-semibold text-soul-glow">天氣</h3>
             </div>
-            <p className="text-xs text-soul-glow/60 mb-2">呈現方式: 航行中的小船</p>
             {loading ? (
               <p className="text-xs text-soul-glow/60">載入中...</p>
             ) : (
@@ -683,12 +961,62 @@ export default function DashboardPage() {
         {/* 第二行：最近交通 & 最近景區人潮（參考附圖） */}
         <div className="grid grid-cols-2 gap-3 mb-3">
           {/* 最近交通卡片 */}
-          <div className="gothic-button p-3 rounded-lg" style={{ minHeight: 'calc(100% * 0.8)' }}>
+          <div 
+            className={`gothic-button p-3 rounded-lg ${(transportError || (!transportLoading && transportData)) && transportCooldown === 0 ? 'cursor-pointer hover:bg-soul-glow/10 transition-colors' : transportCooldown > 0 ? 'opacity-60' : ''}`}
+            style={{ minHeight: 'calc(100% * 0.8)' }}
+            onClick={(transportError || (!transportLoading && transportData)) && transportCooldown === 0 ? () => {
+              // 清除之前的計時器
+              if (transportCooldownTimerRef.current) {
+                clearInterval(transportCooldownTimerRef.current);
+              }
+              
+              // 開始冷卻計時
+              setTransportCooldown(MANUAL_RELOAD_COOLDOWN);
+              transportCooldownTimerRef.current = setInterval(() => {
+                setTransportCooldown((prev) => {
+                  if (prev <= 1) {
+                    if (transportCooldownTimerRef.current) {
+                      clearInterval(transportCooldownTimerRef.current);
+                      transportCooldownTimerRef.current = null;
+                    }
+                    return 0;
+                  }
+                  return prev - 1;
+                });
+              }, 1000);
+              
+              setTransportError(false);
+              setTransportRetryCount(0);
+              fetchTransportData(0);
+            } : undefined}
+            title={(transportError || (!transportLoading && transportData)) ? '點擊重新載入' : ''}
+          >
             <div className="flex items-center gap-2 mb-2">
               <span className="text-xl">🚂</span>
               <h3 className="text-sm font-semibold text-soul-glow">最近交通</h3>
+              {(transportError || (!transportLoading && transportData)) && (
+                <span className="text-xs text-soul-glow/60 ml-auto">
+                  {transportCooldown > 0 ? `${transportCooldown}秒後可重試` : '點擊重新載入'}
+                </span>
+              )}
             </div>
-            {transportData ? (
+            {transportError ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 p-2">
+                  <span className="text-lg text-red-400/60">⚠️</span>
+                  <p className="text-xs text-red-400/80">查詢失敗，點擊卡片重新載入</p>
+                </div>
+              </div>
+            ) : transportLoading ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 p-2">
+                  <div className="w-2 h-2 rounded-full bg-soul-glow/40 animate-pulse" />
+                  <p className="text-xs text-soul-glow/60">
+                    {transportRetryCount > 0 ? `重試中 (${transportRetryCount}/${MAX_RETRY_COUNT})...` : '載入中...'}
+                  </p>
+                </div>
+              </div>
+            ) : transportData ? (
               <div className="space-y-2">
                 {/* 最近火車站 */}
                 {transportData.train ? (
@@ -842,12 +1170,56 @@ export default function DashboardPage() {
         {/* 第三行：最近住宿 & 最近餐廳（參考附圖） */}
         <div className="grid grid-cols-2 gap-3 mb-8">
           {/* 最近住宿卡片 */}
-          <div className="gothic-button p-4 rounded-lg">
+          <div 
+            className={`gothic-button p-4 rounded-lg ${(lodgingError || (!lodgingLoading && recommendations?.lodging && recommendations.lodging.length === 0)) && lodgingCooldown === 0 ? 'cursor-pointer hover:bg-soul-glow/10 transition-colors' : lodgingCooldown > 0 ? 'opacity-60' : ''}`}
+            onClick={(lodgingError || (!lodgingLoading && recommendations?.lodging && recommendations.lodging.length === 0)) && lodgingCooldown === 0 ? () => {
+              // 清除之前的計時器
+              if (lodgingCooldownTimerRef.current) {
+                clearInterval(lodgingCooldownTimerRef.current);
+              }
+              
+              // 開始冷卻計時
+              setLodgingCooldown(MANUAL_RELOAD_COOLDOWN);
+              lodgingCooldownTimerRef.current = setInterval(() => {
+                setLodgingCooldown((prev) => {
+                  if (prev <= 1) {
+                    if (lodgingCooldownTimerRef.current) {
+                      clearInterval(lodgingCooldownTimerRef.current);
+                      lodgingCooldownTimerRef.current = null;
+                    }
+                    return 0;
+                  }
+                  return prev - 1;
+                });
+              }, 1000);
+              
+              setLodgingError(false);
+              setLodgingRetryCount(0);
+              fetchLodgingData(0);
+            } : undefined}
+            title={(lodgingError || (!lodgingLoading && recommendations?.lodging && recommendations.lodging.length === 0)) ? '點擊重新載入' : ''}
+          >
             <div className="flex items-center gap-2 mb-2">
               <span className="text-xl">🏨</span>
               <h3 className="text-sm font-semibold text-soul-glow">最近住宿</h3>
+              {(lodgingError || (!lodgingLoading && recommendations?.lodging && recommendations.lodging.length === 0)) && (
+                <span className="text-xs text-soul-glow/60 ml-auto">
+                  {lodgingCooldown > 0 ? `${lodgingCooldown}秒後可重試` : '點擊重新載入'}
+                </span>
+              )}
             </div>
-            {recommendations?.lodging && recommendations.lodging.length > 0 ? (
+            {lodgingError ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 p-2">
+                  <span className="text-lg text-red-400/60">⚠️</span>
+                  <p className="text-xs text-red-400/80">查詢失敗，點擊卡片重新載入</p>
+                </div>
+              </div>
+            ) : lodgingLoading ? (
+              <p className="text-xs text-soul-glow/60">
+                {lodgingRetryCount > 0 ? `重試中 (${lodgingRetryCount}/${MAX_RETRY_COUNT})...` : '載入中...'}
+              </p>
+            ) : recommendations?.lodging && recommendations.lodging.length > 0 ? (
               <div className="space-y-2 text-xs">
                 {recommendations.lodging.slice(0, 3).map((place, index) => {
                   // 提取距離資訊
@@ -889,18 +1261,62 @@ export default function DashboardPage() {
                   );
                 })}
               </div>
-            ) : (
-              <p className="text-xs text-soul-glow/60">載入中...</p>
-            )}
+            ) : (!lodgingLoading && recommendations?.lodging && recommendations.lodging.length === 0) ? (
+              <p className="text-xs text-soul-glow/60">查無資料</p>
+            ) : null}
           </div>
 
           {/* 最近餐廳卡片 */}
-          <div className="gothic-button p-4 rounded-lg">
+          <div 
+            className={`gothic-button p-4 rounded-lg ${(restaurantError || (!restaurantLoading && recommendations?.restaurant && recommendations.restaurant.length === 0)) && restaurantCooldown === 0 ? 'cursor-pointer hover:bg-soul-glow/10 transition-colors' : restaurantCooldown > 0 ? 'opacity-60' : ''}`}
+            onClick={(restaurantError || (!restaurantLoading && recommendations?.restaurant && recommendations.restaurant.length === 0)) && restaurantCooldown === 0 ? () => {
+              // 清除之前的計時器
+              if (restaurantCooldownTimerRef.current) {
+                clearInterval(restaurantCooldownTimerRef.current);
+              }
+              
+              // 開始冷卻計時
+              setRestaurantCooldown(MANUAL_RELOAD_COOLDOWN);
+              restaurantCooldownTimerRef.current = setInterval(() => {
+                setRestaurantCooldown((prev) => {
+                  if (prev <= 1) {
+                    if (restaurantCooldownTimerRef.current) {
+                      clearInterval(restaurantCooldownTimerRef.current);
+                      restaurantCooldownTimerRef.current = null;
+                    }
+                    return 0;
+                  }
+                  return prev - 1;
+                });
+              }, 1000);
+              
+              setRestaurantError(false);
+              setRestaurantRetryCount(0);
+              fetchRestaurantData(0);
+            } : undefined}
+            title={(restaurantError || (!restaurantLoading && recommendations?.restaurant && recommendations.restaurant.length === 0)) ? '點擊重新載入' : ''}
+          >
             <div className="flex items-center gap-2 mb-2">
               <span className="text-xl">🍴</span>
               <h3 className="text-sm font-semibold text-soul-glow">最近餐廳</h3>
+              {(restaurantError || (!restaurantLoading && recommendations?.restaurant && recommendations.restaurant.length === 0)) && (
+                <span className="text-xs text-soul-glow/60 ml-auto">
+                  {restaurantCooldown > 0 ? `${restaurantCooldown}秒後可重試` : '點擊重新載入'}
+                </span>
+              )}
             </div>
-            {recommendations?.restaurant && recommendations.restaurant.length > 0 ? (
+            {restaurantError ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 p-2">
+                  <span className="text-lg text-red-400/60">⚠️</span>
+                  <p className="text-xs text-red-400/80">查詢失敗，點擊卡片重新載入</p>
+                </div>
+              </div>
+            ) : restaurantLoading ? (
+              <p className="text-xs text-soul-glow/60">
+                {restaurantRetryCount > 0 ? `重試中 (${restaurantRetryCount}/${MAX_RETRY_COUNT})...` : '載入中...'}
+              </p>
+            ) : recommendations?.restaurant && recommendations.restaurant.length > 0 ? (
               <div className="space-y-1 text-xs">
                 {recommendations.restaurant.slice(0, 3).map((place, index) => {
                   // 提取距離資訊（優先使用 distance，否則從 vicinity 解析）
@@ -921,9 +1337,9 @@ export default function DashboardPage() {
                   );
                 })}
               </div>
-            ) : (
-              <p className="text-xs text-soul-glow/60">載入中...</p>
-            )}
+            ) : (!restaurantLoading && recommendations?.restaurant && recommendations.restaurant.length === 0) ? (
+              <p className="text-xs text-soul-glow/60">查無資料</p>
+            ) : null}
           </div>
         </div>
 

@@ -265,6 +265,13 @@ out center meta;
     });
 
     if (!response.ok) {
+      // 檢查是否為速率限制錯誤
+      if (response.status === 429 || response.statusText.includes('Too Many Requests')) {
+        const error = new Error('Overpass API error: Too Many Requests');
+        error.statusCode = 429;
+        error.isRateLimit = true;
+        throw error;
+      }
       throw new Error(`Overpass API error: ${response.statusText}`);
     }
 
@@ -304,6 +311,11 @@ out center meta;
 
   } catch (error) {
     console.error('Error fetching lodgings from OSM:', error);
+    // 如果是速率限制錯誤，重新拋出以便上層處理
+    if (error.isRateLimit || error.statusCode === 429) {
+      throw error;
+    }
+    // 其他錯誤返回空陣列
     return [];
   }
 }
@@ -431,6 +443,13 @@ out center meta;
     });
 
     if (!response.ok) {
+      // 檢查是否為速率限制錯誤
+      if (response.status === 429 || response.statusText.includes('Too Many Requests')) {
+        const error = new Error('Overpass API error: Too Many Requests');
+        error.statusCode = 429;
+        error.isRateLimit = true;
+        throw error;
+      }
       throw new Error(`Overpass API error: ${response.statusText}`);
     }
 
@@ -461,6 +480,11 @@ out center meta;
 
   } catch (error) {
     console.error('Error fetching train stations from OSM:', error);
+    // 如果是速率限制錯誤，重新拋出以便上層處理
+    if (error.isRateLimit || error.statusCode === 429) {
+      throw error;
+    }
+    // 其他錯誤返回空陣列
     return [];
   }
 }
@@ -489,6 +513,13 @@ out center meta;
     });
 
     if (!response.ok) {
+      // 檢查是否為速率限制錯誤
+      if (response.status === 429 || response.statusText.includes('Too Many Requests')) {
+        const error = new Error('Overpass API error: Too Many Requests');
+        error.statusCode = 429;
+        error.isRateLimit = true;
+        throw error;
+      }
       throw new Error(`Overpass API error: ${response.statusText}`);
     }
 
@@ -519,6 +550,11 @@ out center meta;
 
   } catch (error) {
     console.error('Error fetching bus stations from OSM:', error);
+    // 如果是速率限制錯誤，重新拋出以便上層處理
+    if (error.isRateLimit || error.statusCode === 429) {
+      throw error;
+    }
+    // 其他錯誤返回空陣列
     return [];
   }
 }
@@ -546,6 +582,13 @@ out center meta;
     });
 
     if (!response.ok) {
+      // 檢查是否為速率限制錯誤
+      if (response.status === 429 || response.statusText.includes('Too Many Requests')) {
+        const error = new Error('Overpass API error: Too Many Requests');
+        error.statusCode = 429;
+        error.isRateLimit = true;
+        throw error;
+      }
       throw new Error(`Overpass API error: ${response.statusText}`);
     }
 
@@ -576,6 +619,11 @@ out center meta;
 
   } catch (error) {
     console.error('Error fetching YouBike stations from OSM:', error);
+    // 如果是速率限制錯誤，重新拋出以便上層處理
+    if (error.isRateLimit || error.statusCode === 429) {
+      throw error;
+    }
+    // 其他錯誤返回空陣列
     return [];
   }
 }
@@ -604,6 +652,13 @@ out center meta;
     });
 
     if (!response.ok) {
+      // 檢查是否為速率限制錯誤
+      if (response.status === 429 || response.statusText.includes('Too Many Requests')) {
+        const error = new Error('Overpass API error: Too Many Requests');
+        error.statusCode = 429;
+        error.isRateLimit = true;
+        throw error;
+      }
       throw new Error(`Overpass API error: ${response.statusText}`);
     }
 
@@ -650,6 +705,11 @@ out center meta;
 
   } catch (error) {
     console.error('Error fetching restaurants from OSM:', error);
+    // 如果是速率限制錯誤，重新拋出以便上層處理
+    if (error.isRateLimit || error.statusCode === 429) {
+      throw error;
+    }
+    // 其他錯誤返回空陣列
     return [];
   }
 }
@@ -685,6 +745,18 @@ export async function GET(request) {
       return NextResponse.json({ places });
     } catch (error) {
       console.error('Error fetching restaurants:', error);
+      // 如果是速率限制錯誤，返回 429 狀態碼
+      if (error.isRateLimit || error.statusCode === 429) {
+        return NextResponse.json(
+          { 
+            error: 'Too Many Requests',
+            message: '請求過於頻繁，請稍後再試',
+            places: []
+          },
+          { status: 429 }
+        );
+      }
+      // 其他錯誤返回空陣列
       return NextResponse.json({ places: [] });
     }
   }
@@ -774,6 +846,18 @@ export async function GET(request) {
       return NextResponse.json({ places });
     } catch (error) {
       console.error('Error fetching lodgings:', error);
+      // 如果是速率限制錯誤，返回 429 狀態碼
+      if (error.isRateLimit || error.statusCode === 429) {
+        return NextResponse.json(
+          { 
+            error: 'Too Many Requests',
+            message: '請求過於頻繁，請稍後再試',
+            places: []
+          },
+          { status: 429 }
+        );
+      }
+      // 其他錯誤返回空陣列
       return NextResponse.json({ places: [] });
     }
   }
@@ -932,6 +1016,18 @@ export async function GET(request) {
       return NextResponse.json({ places });
     } catch (error) {
       console.error('Error fetching train stations:', error);
+      // 如果是速率限制錯誤，返回 429 狀態碼
+      if (error.isRateLimit || error.statusCode === 429) {
+        return NextResponse.json(
+          { 
+            error: 'Too Many Requests',
+            message: '請求過於頻繁，請稍後再試',
+            places: []
+          },
+          { status: 429 }
+        );
+      }
+      // 其他錯誤返回空陣列
       return NextResponse.json({ places: [] });
     }
   }
@@ -951,6 +1047,18 @@ export async function GET(request) {
       return NextResponse.json({ places });
     } catch (error) {
       console.error('Error fetching bus stations:', error);
+      // 如果是速率限制錯誤，返回 429 狀態碼
+      if (error.isRateLimit || error.statusCode === 429) {
+        return NextResponse.json(
+          { 
+            error: 'Too Many Requests',
+            message: '請求過於頻繁，請稍後再試',
+            places: []
+          },
+          { status: 429 }
+        );
+      }
+      // 其他錯誤返回空陣列
       return NextResponse.json({ places: [] });
     }
   }
@@ -970,6 +1078,18 @@ export async function GET(request) {
       return NextResponse.json({ places });
     } catch (error) {
       console.error('Error fetching YouBike stations:', error);
+      // 如果是速率限制錯誤，返回 429 狀態碼
+      if (error.isRateLimit || error.statusCode === 429) {
+        return NextResponse.json(
+          { 
+            error: 'Too Many Requests',
+            message: '請求過於頻繁，請稍後再試',
+            places: []
+          },
+          { status: 429 }
+        );
+      }
+      // 其他錯誤返回空陣列
       return NextResponse.json({ places: [] });
     }
   }
