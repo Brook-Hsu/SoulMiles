@@ -143,6 +143,22 @@ export default function FootprintMap() {
     }
   }, [fetchExploredGrids]);
 
+  // 從 API 獲取 Footprint 數據和已探索方塊 (並行請求)
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        await Promise.all([fetchFootprints(), fetchExploredGrids()]);
+      } catch (error) {
+        console.error('獲取地圖數據失敗:', error);
+      } finally {
+        setLoading(false);
+        setMapReady(true);
+      }
+    };
+    fetchData();
+  }, [fetchExploredGrids]);
+
   // 取得使用者當前位置並開始追蹤
   useEffect(() => {
     if (typeof window !== 'undefined' && navigator.geolocation) {
@@ -159,6 +175,7 @@ export default function FootprintMap() {
           if (gridId) {
             currentGridIdRef.current = gridId;
             // 檢查是否已經探索過，如果沒有則記錄（使用 ref 獲取最新值）
+            // 這裡會等待 exploredGridIdsRef 初始化完成（在 fetchExploredGrids 中更新）
             if (!exploredGridIdsRef.current.has(gridId)) {
               recordNewGrid(latitude, longitude);
             }
@@ -209,21 +226,19 @@ export default function FootprintMap() {
     };
   }, [recordNewGrid]); // 只依賴 recordNewGrid，避免無限循環
 
-  // 從 API 獲取 Footprint 數據和已探索方塊 (並行請求)
+  // 當已探索網格列表載入完成後，檢查當前位置是否需要記錄
+  // 這確保了在開啟地圖時，即使位置獲取比數據載入快，也能正確檢查並記錄
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        await Promise.all([fetchFootprints(), fetchExploredGrids()]);
-      } catch (error) {
-        console.error('獲取地圖數據失敗:', error);
-      } finally {
-        setLoading(false);
-        setMapReady(true);
+    // 只有在數據已載入（mapReady）且用戶位置已取得時才檢查
+    if (mapReady && userLocation && currentGridIdRef.current) {
+      const gridId = currentGridIdRef.current;
+      // 檢查當前網格是否已記錄（確保在數據載入後檢查一次）
+      // 使用 exploredGridIds（state）而不是 ref，因為這是響應式的檢查
+      if (!exploredGridIds.has(gridId)) {
+        recordNewGrid(userLocation[0], userLocation[1]);
       }
-    };
-    fetchData();
-  }, [fetchExploredGrids]);
+    }
+  }, [mapReady, exploredGridIds, userLocation, recordNewGrid]); // 當數據載入完成時檢查
 
   // 解析座標字符串為 [lat, lng]
   const parseCoordinate = (coord: string | null): [number, number] | null => {
